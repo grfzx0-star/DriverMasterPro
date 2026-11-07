@@ -1,0 +1,34 @@
+name: DriverMasterPro CI
+
+on:
+  push:
+    branches:
+      - ci/github-actions-dotnet10-from-main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore .\DriverMasterPro.csproj
+
+      - name: Build
+        run: dotnet build .\DriverMasterPro.csproj --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet run --project .\tests\DriverMasterPro.Tests\DriverMasterPro.Tests.csproj --configuration Release
