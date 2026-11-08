@@ -1,34 +1,226 @@
-﻿<Window x:Class="DriverMasterPro.MainWindow"
+<Window x:Class="DriverMasterPro.MainWindow"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
- Title="DRIVER MASTER PRO" Height="740" Width="1160" MinHeight="580" MinWidth="850"
- WindowStartupLocation="CenterScreen" Background="#111923" Foreground="#F2F5F7">
- <Grid>
+ Title="DRIVER MASTER PRO"
+ Height="780" Width="1260"
+ MinHeight="620" MinWidth="900"
+ WindowStartupLocation="CenterScreen"
+ Background="#080D14"
+ Foreground="#F4F7FB"
+ FontFamily="Segoe UI">
+
+ <Window.Resources>
+
+  <SolidColorBrush x:Key="Accent" Color="#36D6D0"/>
+  <SolidColorBrush x:Key="Muted" Color="#91A3B5"/>
+  <SolidColorBrush x:Key="Glass" Color="#B3172432"/>
+
+  <Style TargetType="Button">
+   <Setter Property="Foreground" Value="#EAF4FA"/>
+   <Setter Property="Background" Value="#202E3D"/>
+   <Setter Property="BorderThickness" Value="0"/>
+   <Setter Property="Padding" Value="12,9"/>
+   <Setter Property="Cursor" Value="Hand"/>
+   <Setter Property="FontSize" Value="13"/>
+   <Setter Property="Template">
+    <Setter.Value>
+     <ControlTemplate TargetType="Button">
+      <Border x:Name="ButtonBorder"
+       Background="{TemplateBinding Background}"
+       CornerRadius="9"
+       Padding="{TemplateBinding Padding}">
+       <ContentPresenter
+        HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+        VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+      </Border>
+      <ControlTemplate.Triggers>
+       <Trigger Property="IsMouseOver" Value="True">
+        <Setter TargetName="ButtonBorder"
+         Property="Background" Value="#344B5E"/>
+       </Trigger>
+       <Trigger Property="IsPressed" Value="True">
+        <Setter TargetName="ButtonBorder"
+         Property="Opacity" Value="0.75"/>
+       </Trigger>
+       <Trigger Property="IsEnabled" Value="False">
+        <Setter TargetName="ButtonBorder"
+         Property="Opacity" Value="0.4"/>
+       </Trigger>
+      </ControlTemplate.Triggers>
+     </ControlTemplate>
+    </Setter.Value>
+   </Setter>
+  </Style>
+
+  <Style TargetType="TextBox">
+   <Setter Property="Background" Value="#172330"/>
+   <Setter Property="Foreground" Value="#F4F7FB"/>
+   <Setter Property="BorderBrush" Value="#34495B"/>
+   <Setter Property="BorderThickness" Value="1"/>
+   <Setter Property="Padding" Value="9,5"/>
+   <Setter Property="CaretBrush" Value="#36D6D0"/>
+   <Setter Property="VerticalContentAlignment" Value="Center"/>
+  </Style>
+
+  <Style TargetType="ComboBox">
+   <Setter Property="Background" Value="#172330"/>
+   <Setter Property="Foreground" Value="#F4F7FB"/>
+   <Setter Property="BorderBrush" Value="#34495B"/>
+   <Setter Property="Padding" Value="5"/>
+  </Style>
+
+  <Style TargetType="DataGridColumnHeader">
+   <Setter Property="Background" Value="#192A39"/>
+   <Setter Property="Foreground" Value="#36D6D0"/>
+   <Setter Property="Padding" Value="12,13"/>
+   <Setter Property="BorderThickness" Value="0"/>
+   <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+
+  <Style TargetType="DataGridCell">
+   <Setter Property="Foreground" Value="#E2EAF2"/>
+   <Setter Property="Background" Value="Transparent"/>
+   <Setter Property="BorderThickness" Value="0"/>
+   <Setter Property="Padding" Value="9,8"/>
+  </Style>
+
+ </Window.Resources>
+
+ <Grid Margin="12">
   <Grid.ColumnDefinitions>
    <ColumnDefinition Width="225"/>
    <ColumnDefinition Width="*"/>
   </Grid.ColumnDefinitions>
-  <Border Grid.Column="0" Background="#202A36" Padding="20">
+
+  <!-- GLASS SIDEBAR -->
+  <Border Grid.Column="0"
+   Background="#E6101925"
+   BorderBrush="#3536D6D0"
+   BorderThickness="1"
+   CornerRadius="17"
+   Padding="17">
+
    <DockPanel LastChildFill="True">
+
     <StackPanel DockPanel.Dock="Top">
-     <TextBlock Text="DRIVER" FontSize="25" FontWeight="Bold"/>
-     <TextBlock Text="MASTER PRO" FontSize="19" Foreground="#25A56A" FontWeight="SemiBold"/>
-     <TextBlock Text="Independent Windows Edition" Margin="0,4,0,28" FontSize="10" Foreground="#AAB6C2"/>
-     <Button Content="Dashboard" Height="40" Background="#2D3A49" Foreground="White" BorderThickness="0" HorizontalContentAlignment="Left" Padding="12"/>
-     <Button Content="Device inventory" Height="40" Margin="0,7,0,0" Background="Transparent" Foreground="White" BorderThickness="0" HorizontalContentAlignment="Left" Padding="12"/>
+     <Border Background="#2636D6D0"
+      CornerRadius="12" Padding="12"
+      Margin="0,0,0,24">
+      <StackPanel>
+       <TextBlock x:Name="BrandDriverText"
+        Text="DRIVER" FontSize="27"
+        FontWeight="Bold" Foreground="White"/>
+       <TextBlock x:Name="BrandMasterText"
+        Text="MASTER PRO" FontSize="18"
+        FontWeight="Bold" Foreground="#36D6D0"/>
+       <TextBlock x:Name="EditionLabel"
+        Text="Independent Windows Edition"
+        FontSize="10" Foreground="#B8C8D6"
+        Margin="0,5,0,0"/>
+      </StackPanel>
+     </Border>
+
+     <TextBlock Text="WORKSPACE"
+      Foreground="#728A9D" FontSize="10"
+      FontWeight="Bold" Margin="5,0,0,10"/>
+
+     <Button x:Name="DashboardButton"
+      Content="   ◈    Dashboard"
+      Height="44" HorizontalContentAlignment="Left"
+      Background="#293B4C" Foreground="#36D6D0"
+      Margin="0,0,0,7"/>
+
+     <Button x:Name="InventoryButton"
+      Content="   ▦    Device inventory"
+      Height="44" HorizontalContentAlignment="Left"
+      Background="Transparent"/>
+
+     <Border Height="1" Background="#34495B"
+      Margin="0,20,0,18"/>
+
+     <TextBlock Text="SYSTEM STATUS"
+      Foreground="#728A9D" FontSize="10"
+      FontWeight="Bold" Margin="5,0,0,12"/>
+
+     <Border Background="#172633"
+      CornerRadius="10" Padding="11">
+      <StackPanel>
+       <TextBlock Text="●  LOCAL DEVICE"
+        Foreground="#36D6D0" FontSize="11"
+        FontWeight="Bold"/>
+       <TextBlock Text="Read-only monitoring"
+        Foreground="#91A3B5" FontSize="10"
+        Margin="0,5,0,0"/>
+      </StackPanel>
+     </Border>
     </StackPanel>
+
     <StackPanel DockPanel.Dock="Bottom">
-     <TextBlock Text="Language / Sprache" Foreground="#AAB6C2" Margin="0,0,0,6"/>
-     <ComboBox x:Name="LanguageBox" SelectedIndex="0" Height="32" SelectionChanged="LanguageBox_SelectionChanged">
-      <ComboBoxItem Content="Deutsch"/>
-      <ComboBoxItem Content="العربية"/>
-     </ComboBox>
-     <TextBlock Text="Version 0.2 — Read-only MVP" Margin="0,16,0,0" FontSize="10" Foreground="#AAB6C2"/>
+     <TextBlock x:Name="LanguageLabel"
+      Text="Language / Sprache"
+      Foreground="#91A3B5" Margin="0,0,0,7"/>
+
+     <ComboBox x:Name="LanguageBox"
+          SelectedIndex="0"
+          Height="34"
+          Background="#172633"
+          Foreground="#F4F7FB"
+          BorderBrush="#36D6D0"
+          BorderThickness="1"
+          Padding="8,4"
+          SelectionChanged="LanguageBox_SelectionChanged">
+
+    <ComboBox.Resources>
+        <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}"
+                         Color="#172633"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.WindowTextBrushKey}"
+                         Color="#F4F7FB"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}"
+                         Color="#263B4B"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}"
+                         Color="#36D6D0"/>
+    </ComboBox.Resources>
+
+    <ComboBox.ItemContainerStyle>
+        <Style TargetType="{x:Type ComboBoxItem}">
+            <Setter Property="Background" Value="#172633"/>
+            <Setter Property="Foreground" Value="#F4F7FB"/>
+            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+
+            <Style.Triggers>
+                <Trigger Property="IsHighlighted" Value="True">
+                    <Setter Property="Background" Value="#263B4B"/>
+                    <Setter Property="Foreground" Value="#36D6D0"/>
+                </Trigger>
+
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#263B4B"/>
+                    <Setter Property="Foreground" Value="#36D6D0"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </ComboBox.ItemContainerStyle>
+
+    <ComboBoxItem Content="Deutsch"/>
+    <ComboBoxItem Content="العربية"/>
+    <ComboBoxItem Content="English"/>
+    <ComboBoxItem Content="Français"/>
+    <ComboBoxItem Content="Español"/>
+
+</ComboBox>
+
+     <TextBlock x:Name="VersionLabel"
+      Text="Version 0.2 — Read-only MVP"
+      Foreground="#71879A" FontSize="10"
+      Margin="0,17,0,0"/>
     </StackPanel>
+
    </DockPanel>
   </Border>
 
-  <Grid Grid.Column="1" Margin="26">
+  <!-- MAIN CONTENT -->
+  <Grid Grid.Column="1" Margin="22,8,8,8">
    <Grid.RowDefinitions>
     <RowDefinition Height="Auto"/>
     <RowDefinition Height="Auto"/>
@@ -37,61 +229,177 @@
     <RowDefinition Height="Auto"/>
    </Grid.RowDefinitions>
 
-   <Grid Grid.Row="0">
-    <StackPanel HorizontalAlignment="Left">
-     <TextBlock x:Name="PageTitle" Text="System Dashboard" FontSize="27" FontWeight="Bold"/>
-     <TextBlock x:Name="PageSubtitle" Text="Lokale Geräteübersicht — keine Änderungen am System" Foreground="#AAB6C2" Margin="0,5,0,0"/>
+   <!-- HEADER -->
+   <Grid Grid.Row="0" Margin="0,5,0,0">
+    <StackPanel>
+     <TextBlock x:Name="PageTitle"
+      Text="System Dashboard"
+      FontSize="29" FontWeight="Bold"/>
+     <TextBlock x:Name="PageSubtitle"
+      Text="Lokale Geräteübersicht — keine Änderungen am System"
+      Foreground="#91A3B5" Margin="0,6,0,0"/>
     </StackPanel>
-    <Button x:Name="ScanButton" Content="Jetzt scannen" Click="ScanButton_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Padding="18,10" Background="#25A56A" Foreground="White" FontWeight="Bold" BorderThickness="0"/>
+
+    <Button x:Name="ScanButton"
+     Content="   ⟳   Jetzt scannen"
+     Click="ScanButton_Click"
+     HorizontalAlignment="Right"
+     VerticalAlignment="Center"
+     Background="#167D83"
+     Foreground="White"
+     FontWeight="Bold"
+     Padding="19,13"/>
    </Grid>
 
-   <UniformGrid Grid.Row="1" Columns="3" Margin="0,22,0,18">
-    <Border Background="#202A36" CornerRadius="9" Padding="16" Margin="0,0,10,0">
+   <!-- STAT CARDS -->
+   <UniformGrid Grid.Row="1" Columns="3"
+    Margin="0,25,0,18">
+
+    <Border Background="#C5182736"
+     BorderBrush="#3536D6D0"
+     BorderThickness="1"
+     CornerRadius="13" Padding="17"
+     Margin="0,0,9,0">
      <StackPanel>
-      <TextBlock x:Name="DevicesLabel" Text="Erkannte Geräte" Foreground="#AAB6C2"/>
-      <TextBlock x:Name="DeviceCount" Text="0" FontSize="30" FontWeight="Bold" Margin="0,7,0,0"/>
+      <TextBlock Text="◈  DEVICE INVENTORY"
+       Foreground="#36D6D0" FontSize="10"
+       FontWeight="Bold"/>
+      <TextBlock x:Name="DevicesLabel"
+       Text="Erkannte Geräte"
+       Foreground="#AABAC9" Margin="0,10,0,0"/>
+      <TextBlock x:Name="DeviceCount"
+       Text="0" FontSize="32"
+       FontWeight="Bold" Margin="0,3,0,0"/>
      </StackPanel>
     </Border>
-    <Border Background="#202A36" CornerRadius="9" Padding="16" Margin="5,0">
+
+    <Border Background="#C5182736"
+     BorderBrush="#3536D6D0"
+     BorderThickness="1"
+     CornerRadius="13" Padding="17"
+     Margin="5,0">
      <StackPanel>
-      <TextBlock x:Name="HealthyLabel" Text="Ohne gemeldeten Fehler" Foreground="#AAB6C2"/>
-      <TextBlock x:Name="HealthyCount" Text="0" FontSize="30" FontWeight="Bold" Margin="0,7,0,0"/>
+      <TextBlock Text="✓  HEALTH STATUS"
+       Foreground="#56D9A0" FontSize="10"
+       FontWeight="Bold"/>
+      <TextBlock x:Name="HealthyLabel"
+       Text="Ohne gemeldeten Fehler"
+       Foreground="#AABAC9" Margin="0,10,0,0"/>
+      <TextBlock x:Name="HealthyCount"
+       Text="0" FontSize="32"
+       FontWeight="Bold" Margin="0,3,0,0"/>
      </StackPanel>
     </Border>
-    <Border Background="#202A36" CornerRadius="9" Padding="16" Margin="10,0,0,0">
+
+    <Border Background="#C5182736"
+     BorderBrush="#3536D6D0"
+     BorderThickness="1"
+     CornerRadius="13" Padding="17"
+     Margin="9,0,0,0">
      <StackPanel>
-      <TextBlock x:Name="ProblemLabel" Text="Gemeldete Probleme" Foreground="#AAB6C2"/>
-      <TextBlock x:Name="ProblemCount" Text="0" FontSize="30" FontWeight="Bold" Margin="0,7,0,0"/>
+      <TextBlock Text="!  ATTENTION"
+       Foreground="#F2B76D" FontSize="10"
+       FontWeight="Bold"/>
+      <TextBlock x:Name="ProblemLabel"
+       Text="Gemeldete Probleme"
+       Foreground="#AABAC9" Margin="0,10,0,0"/>
+      <TextBlock x:Name="ProblemCount"
+       Text="0" FontSize="32"
+       FontWeight="Bold" Margin="0,3,0,0"/>
      </StackPanel>
     </Border>
    </UniformGrid>
 
-   <Border Grid.Row="2" Background="#202A36" CornerRadius="9" Padding="10" Margin="0,0,0,10">
-    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-     <TextBlock x:Name="SearchLabel" Text="Suche:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-     <TextBox x:Name="SearchBox" Width="260" Height="30" Padding="6,4" TextChanged="SearchBox_TextChanged"/>
-     <TextBlock x:Name="FilterLabel" Text="Filter:" VerticalAlignment="Center" Margin="20,0,8,0"/>
-     <ComboBox x:Name="FilterBox" Width="190" Height="30" SelectedIndex="0" SelectionChanged="FilterBox_SelectionChanged">
+   <!-- SEARCH AND FILTER -->
+   <Border Grid.Row="2"
+    Background="#C5182736"
+    BorderBrush="#3036D6D0"
+    BorderThickness="1"
+    CornerRadius="12"
+    Padding="12" Margin="0,0,0,12">
+
+    <Grid>
+     <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="Auto"/>
+      <ColumnDefinition Width="2*"/>
+      <ColumnDefinition Width="Auto"/>
+      <ColumnDefinition Width="*"/>
+     </Grid.ColumnDefinitions>
+
+     <TextBlock x:Name="SearchLabel"
+      Text="Suche:"
+      VerticalAlignment="Center"
+      Foreground="#AABAC9" Margin="0,0,10,0"/>
+
+     <TextBox x:Name="SearchBox"
+      Grid.Column="1" Height="34"
+      TextChanged="SearchBox_TextChanged"/>
+
+     <TextBlock x:Name="FilterLabel"
+      Grid.Column="2" Text="Filter:"
+      VerticalAlignment="Center"
+      Foreground="#AABAC9"
+      Margin="17,0,10,0"/>
+
+     <ComboBox x:Name="FilterBox"
+      Grid.Column="3" Height="34"
+      SelectedIndex="0"
+      SelectionChanged="FilterBox_SelectionChanged">
       <ComboBoxItem Content="Alle Geräte"/>
       <ComboBoxItem Content="Nur mit Problemen"/>
       <ComboBoxItem Content="Ohne Probleme"/>
      </ComboBox>
-    </StackPanel>
+    </Grid>
    </Border>
 
-   <Border Grid.Row="3" Background="#202A36" CornerRadius="9" Padding="12">
-    <DataGrid x:Name="DevicesGrid" AutoGenerateColumns="False" IsReadOnly="True" Background="#202A36" Foreground="#F2F5F7" HeadersVisibility="Column" GridLinesVisibility="Horizontal" BorderThickness="0" RowBackground="#202A36" AlternatingRowBackground="#263342">
+   <!-- DEVICE TABLE -->
+   <Border Grid.Row="3"
+    Background="#C5121D29"
+    BorderBrush="#3536D6D0"
+    BorderThickness="1"
+    CornerRadius="13" Padding="10">
+
+    <DataGrid x:Name="DevicesGrid"
+     AutoGenerateColumns="False"
+     IsReadOnly="True"
+     CanUserAddRows="False"
+     Background="#121D29"
+     Foreground="#F2F5F7"
+     HeadersVisibility="Column"
+     GridLinesVisibility="Horizontal"
+     HorizontalGridLinesBrush="#263849"
+     BorderThickness="0"
+     RowBackground="#182633"
+     AlternatingRowBackground="#202F3D"
+     RowHeaderWidth="0"
+     SelectionMode="Single"
+     SelectionUnit="FullRow">
+
      <DataGrid.Columns>
-      <DataGridTextColumn Header="Gerät" Binding="{Binding Name}" Width="2*"/>
-      <DataGridTextColumn Header="Hersteller" Binding="{Binding Manufacturer}" Width="*"/>
-      <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*"/>
-      <DataGridTextColumn Header="Problemcode" Binding="{Binding ProblemCode}" Width="*"/>
-      <DataGridTextColumn Header="Bewertung" Binding="{Binding Health}" Width="*"/>
+      <DataGridTextColumn Header="Gerät"
+       Binding="{Binding Name}" Width="2*"/>
+      <DataGridTextColumn Header="Hersteller"
+       Binding="{Binding Manufacturer}" Width="*"/>
+      <DataGridTextColumn Header="Status"
+       Binding="{Binding Status}" Width="*"/>
+      <DataGridTextColumn Header="Problemcode"
+       Binding="{Binding ProblemCode}" Width="*"/>
+      <DataGridTextColumn Header="Bewertung"
+       Binding="{Binding Health}" Width="*"/>
      </DataGrid.Columns>
     </DataGrid>
    </Border>
 
-   <TextBlock x:Name="StatusText" Grid.Row="4" Text="Bereit. Bitte zuerst einen Scan starten." Foreground="#AAB6C2" Margin="2,11,0,0"/>
+   <!-- FOOTER -->
+   <Border Grid.Row="4"
+    Background="#A8172635"
+    CornerRadius="8"
+    Padding="10,8" Margin="0,10,0,0">
+    <TextBlock x:Name="StatusText"
+     Text="Bereit. Bitte zuerst einen Scan starten."
+     Foreground="#AABAC9"/>
+   </Border>
+
   </Grid>
  </Grid>
 </Window>

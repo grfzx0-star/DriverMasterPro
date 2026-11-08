@@ -1,0 +1,78 @@
+name: DriverMasterPro CI
+
+on:
+  push:
+    branches:
+      - feature/v0.2-foundation
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: drivermasterpro-ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and test (Windows / .NET 10 / Release)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        shell: pwsh
+
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Print checked-out commit identity
+        shell: pwsh
+        env:
+          PR_HEAD_REF: ${{ github.head_ref }}
+          PR_BASE_REF: ${{ github.base_ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $checkedOut = (git rev-parse HEAD).Trim()
+          Write-Host "Event name:        $env:GITHUB_EVENT_NAME"
+          Write-Host "GITHUB_SHA:        $env:GITHUB_SHA"
+          Write-Host "GITHUB_REF:        $env:GITHUB_REF"
+          Write-Host "Checked-out SHA:   $checkedOut"
+          if ($env:GITHUB_EVENT_NAME -eq 'pull_request') {
+            Write-Host "PR head SHA:       $env:PR_HEAD_SHA"
+            Write-Host "PR base SHA:       $env:PR_BASE_SHA"
+            Write-Host "PR head ref:       $env:PR_HEAD_REF"
+            Write-Host "PR base ref:       $env:PR_BASE_REF"
+          }
+          git --no-pager log -1 --format="Commit: %H%nAuthor: %an%nDate:   %ci%nSubject: %s"
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: .NET info
+        run: dotnet --info
+
+      - name: Restore application
+        run: dotnet restore .\DriverMasterPro.csproj
+
+      - name: Build application (Release)
+        run: dotnet build .\DriverMasterPro.csproj --configuration Release --no-restore
+
+      - name: Build test harness (Release)
+        run: dotnet build .\tests\DriverMasterPro.Tests\DriverMasterPro.Tests.csproj --configuration Release
+
+      - name: Execute custom test harness (Release)
+        run: dotnet run --project .\tests\DriverMasterPro.Tests\DriverMasterPro.Tests.csproj --configuration Release --no-build --no-restore
