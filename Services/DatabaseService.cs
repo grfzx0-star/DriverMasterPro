@@ -8,6 +8,7 @@ namespace DriverMasterPro.Services;
 
 public sealed class DatabaseService : IDatabaseService
 {
+    private const int CurrentSchemaVersion = 1;
     private readonly string _dbPath;
     public string DatabasePath => _dbPath;
 
@@ -30,7 +31,8 @@ public sealed class DatabaseService : IDatabaseService
         }
     }
 
-    private SqliteConnection OpenConnection() => new($"Data Source={_dbPath}");
+    private SqliteConnection OpenConnection() =>
+        new(new SqliteConnectionStringBuilder { DataSource = _dbPath, ForeignKeys = true }.ToString());
 
     public async Task InitializeAsync()
     {
@@ -38,8 +40,11 @@ public sealed class DatabaseService : IDatabaseService
         {
             await using var connection = OpenConnection();
             await connection.OpenAsync();
-            await using var command = connection.CreateCommand();
-            command.CommandText = """
+            await using var transaction = await connection.BeginTransactionAsync();
+
+            var schemaCommand = connection.CreateCommand();
+            schemaCommand.Transaction = (SqliteTransaction)transaction;
+            schemaCommand.CommandText = """
                 CREATE TABLE IF NOT EXISTS Devices (
                     DeviceId TEXT PRIMARY KEY,
                     Name TEXT NOT NULL,
@@ -56,38 +61,81 @@ public sealed class DatabaseService : IDatabaseService
                 );
                 CREATE INDEX IF NOT EXISTS IX_Devices_LastSeenUtc ON Devices(LastSeenUtc);
                 """;
-            await command.ExecuteNonQueryAsync();
-
-            var hasProblemCodeEvidenceColumn = false;
-            await using (var schemaCommand = connection.CreateCommand())
+            await using (schemaCommand)
             {
-                schemaCommand.CommandText = "PRAGMA table_info(Devices);";
-                await using var reader = await schemaCommand.ExecuteReaderAsync();
-                while (await reader.ReadAsync())
+                await schemaCommand.ExecuteNonQueryAsync();
+            }
+
+            var versionCommand = connection.CreateCommand();
+            versionCommand.Transaction = (SqliteTransaction)transaction;
+            versionCommand.CommandText = "PRAGMA user_version;";
+            int schemaVersion;
+            await using (versionCommand)
+            {
+                schemaVersion = Convert.ToInt32(await versionCommand.ExecuteScalarAsync());
+            }
+
+            if (schemaVersion > CurrentSchemaVersion)
+            {
+                throw new InvalidOperationException(
+                    $"Database schema version {schemaVersion} is newer than supported version {CurrentSchemaVersion}.");
+            }
+
+            if (schemaVersion < 1)
+            {
+                var hasProblemCodeEvidenceColumn = await HasColumnAsync(
+                    connection, (SqliteTransaction)transaction, "Devices", "ProblemCodeEvidenceAvailable");
+
+                if (!hasProblemCodeEvidenceColumn)
                 {
-                    if (reader.GetString(1).Equals("ProblemCodeEvidenceAvailable", StringComparison.OrdinalIgnoreCase))
+                    var evidenceMigration = connection.CreateCommand();
+                    evidenceMigration.Transaction = (SqliteTransaction)transaction;
+                    evidenceMigration.CommandText = """
+                        ALTER TABLE Devices
+                        ADD COLUMN ProblemCodeEvidenceAvailable INTEGER NOT NULL DEFAULT 1;
+                        UPDATE Devices
+                        SET ProblemCodeEvidenceAvailable = 0
+                        WHERE ProblemCode = 0;
+                        """;
+                    await using (evidenceMigration)
                     {
-                        hasProblemCodeEvidenceColumn = true;
-                        break;
+                        await evidenceMigration.ExecuteNonQueryAsync();
                     }
+                }
+
+                var snapshotSchema = connection.CreateCommand();
+                snapshotSchema.Transaction = (SqliteTransaction)transaction;
+                snapshotSchema.CommandText = """
+                    CREATE TABLE ScanSnapshots (
+                        ScanId INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ScanTimeUtc TEXT NOT NULL,
+                        DeviceCount INTEGER NOT NULL CHECK(DeviceCount >= 0),
+                        IsLatest INTEGER NOT NULL CHECK(IsLatest IN (0, 1))
+                    );
+                    CREATE UNIQUE INDEX IX_ScanSnapshots_OneLatest
+                        ON ScanSnapshots(IsLatest) WHERE IsLatest = 1;
+                    CREATE TABLE DeviceObservations (
+                        ScanId INTEGER NOT NULL REFERENCES ScanSnapshots(ScanId) ON DELETE CASCADE,
+                        ObservationOrdinal INTEGER NOT NULL CHECK(ObservationOrdinal >= 0),
+                        DeviceId TEXT,
+                        Name TEXT NOT NULL,
+                        Manufacturer TEXT,
+                        Status TEXT,
+                        ProblemCode INTEGER,
+                        ProblemCodeEvidenceAvailable INTEGER NOT NULL CHECK(ProblemCodeEvidenceAvailable IN (0, 1)),
+                        PRIMARY KEY(ScanId, ObservationOrdinal)
+                    );
+                    CREATE INDEX IX_DeviceObservations_DeviceId
+                        ON DeviceObservations(DeviceId);
+                    PRAGMA user_version = 1;
+                    """;
+                await using (snapshotSchema)
+                {
+                    await snapshotSchema.ExecuteNonQueryAsync();
                 }
             }
 
-            if (!hasProblemCodeEvidenceColumn)
-            {
-                await using var migrationTransaction = await connection.BeginTransactionAsync();
-                await using var migrationCommand = connection.CreateCommand();
-                migrationCommand.Transaction = (SqliteTransaction)migrationTransaction;
-                migrationCommand.CommandText = """
-                    ALTER TABLE Devices
-                    ADD COLUMN ProblemCodeEvidenceAvailable INTEGER NOT NULL DEFAULT 1;
-                    UPDATE Devices
-                    SET ProblemCodeEvidenceAvailable = 0
-                    WHERE ProblemCode = 0;
-                    """;
-                await migrationCommand.ExecuteNonQueryAsync();
-                await migrationTransaction.CommitAsync();
-            }
+            await transaction.CommitAsync();
         }
         catch (Exception ex)
         {
@@ -107,73 +155,73 @@ public sealed class DatabaseService : IDatabaseService
             await connection.OpenAsync(cancellationToken);
             await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
-            await using var command = connection.CreateCommand();
-            command.Transaction = (SqliteTransaction)transaction;
-            command.CommandText = """
-                INSERT INTO Devices(
-                    DeviceId, Name, Manufacturer, Status, ProblemCode,
-                    ProblemCodeEvidenceAvailable, LastSeenUtc)
-                VALUES($id, $name, $manufacturer, $status, $problem, $problemEvidence, $seen)
-                ON CONFLICT(DeviceId) DO UPDATE SET
-                    Name=excluded.Name, Manufacturer=excluded.Manufacturer,
-                    Status=excluded.Status, ProblemCode=excluded.ProblemCode,
-                    ProblemCodeEvidenceAvailable=excluded.ProblemCodeEvidenceAvailable,
-                    LastSeenUtc=excluded.LastSeenUtc;
-                """;
-
-            var pId = command.Parameters.Add("$id", SqliteType.Text);
-            var pName = command.Parameters.Add("$name", SqliteType.Text);
-            var pManufacturer = command.Parameters.Add("$manufacturer", SqliteType.Text);
-            var pStatus = command.Parameters.Add("$status", SqliteType.Text);
-            var pProblem = command.Parameters.Add("$problem", SqliteType.Integer);
-            var pProblemEvidence = command.Parameters.Add("$problemEvidence", SqliteType.Integer);
-            var pSeen = command.Parameters.Add("$seen", SqliteType.Text);
-
-            var nowIso = DateTime.UtcNow.ToString("O");
-            var scanObservationId = Guid.NewGuid().ToString("N");
-            var seenDeviceIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            int observationCounter = 0;
-
-            foreach (var device in devices)
+            var latestCommand = connection.CreateCommand();
+            latestCommand.Transaction = (SqliteTransaction)transaction;
+            latestCommand.CommandText = "UPDATE ScanSnapshots SET IsLatest = 0 WHERE IsLatest = 1;";
+            await using (latestCommand)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                string rawId = device.DeviceId?.Trim() ?? "";
-                string resolvedId;
-
-                if (string.IsNullOrEmpty(rawId))
-                {
-                    // Keep devices without a supplied identifier as separate scan observations.
-                    resolvedId = $"OBSERVATION:{scanObservationId}:{device.Name}#{observationCounter++}";
-                }
-                else
-                {
-                    resolvedId = rawId;
-
-                    // Preserve repeated IDs as separate observations without inferring physical identity.
-                    if (!seenDeviceIds.Add(resolvedId))
-                    {
-                        resolvedId = $"{resolvedId}#DUP-OBSERVATION:{scanObservationId}:{observationCounter++}";
-                    }
-                }
-
-                pId.Value = resolvedId;
-                pName.Value = string.IsNullOrWhiteSpace(device.Name) ? "Unknown device" : device.Name;
-                pManufacturer.Value = (object?)device.Manufacturer ?? DBNull.Value;
-                pStatus.Value = (object?)device.Status ?? DBNull.Value;
-                pProblem.Value = (object?)device.ProblemCode ?? DBNull.Value;
-                pProblemEvidence.Value = device.ProblemCode is null ? 0 : 1;
-                pSeen.Value = nowIso;
-
-                await command.ExecuteNonQueryAsync(cancellationToken);
+                await latestCommand.ExecuteNonQueryAsync(cancellationToken);
             }
 
-            await using var history = connection.CreateCommand();
-            history.Transaction = (SqliteTransaction)transaction;
-            history.CommandText = "INSERT INTO ScanHistory(ScanTimeUtc, DeviceCount) VALUES($time, $count)";
-            history.Parameters.AddWithValue("$time", nowIso);
-            history.Parameters.AddWithValue("$count", devices.Count);
-            await history.ExecuteNonQueryAsync(cancellationToken);
+            var scanTimeUtc = DateTime.UtcNow.ToString("O");
+            var scanCommand = connection.CreateCommand();
+            scanCommand.Transaction = (SqliteTransaction)transaction;
+            scanCommand.CommandText = """
+                INSERT INTO ScanSnapshots(ScanTimeUtc, DeviceCount, IsLatest)
+                VALUES($scanTime, $deviceCount, 1);
+                SELECT last_insert_rowid();
+                """;
+            scanCommand.Parameters.AddWithValue("$scanTime", scanTimeUtc);
+            scanCommand.Parameters.AddWithValue("$deviceCount", devices.Count);
+            long scanId;
+            await using (scanCommand)
+            {
+                scanId = Convert.ToInt64(await scanCommand.ExecuteScalarAsync(cancellationToken));
+            }
+
+            var observationCommand = connection.CreateCommand();
+            observationCommand.Transaction = (SqliteTransaction)transaction;
+            observationCommand.CommandText = """
+                INSERT INTO DeviceObservations(
+                    ScanId, ObservationOrdinal, DeviceId, Name, Manufacturer, Status,
+                    ProblemCode, ProblemCodeEvidenceAvailable)
+                VALUES(
+                    $scanId, $ordinal, $deviceId, $name, $manufacturer, $status,
+                    $problemCode, $problemCodeEvidenceAvailable);
+                """;
+
+            var scanIdParameter = observationCommand.Parameters.Add("$scanId", SqliteType.Integer);
+            var ordinalParameter = observationCommand.Parameters.Add("$ordinal", SqliteType.Integer);
+            var deviceIdParameter = observationCommand.Parameters.Add("$deviceId", SqliteType.Text);
+            var nameParameter = observationCommand.Parameters.Add("$name", SqliteType.Text);
+            var manufacturerParameter = observationCommand.Parameters.Add("$manufacturer", SqliteType.Text);
+            var statusParameter = observationCommand.Parameters.Add("$status", SqliteType.Text);
+            var problemCodeParameter = observationCommand.Parameters.Add("$problemCode", SqliteType.Integer);
+            var evidenceParameter = observationCommand.Parameters.Add("$problemCodeEvidenceAvailable", SqliteType.Integer);
+            scanIdParameter.Value = scanId;
+
+            await using (observationCommand)
+            {
+                int ordinal = 0;
+                foreach (var device in devices)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    ordinalParameter.Value = ordinal++;
+                    deviceIdParameter.Value = string.IsNullOrWhiteSpace(device.DeviceId)
+                        ? DBNull.Value
+                        : device.DeviceId;
+                    nameParameter.Value = string.IsNullOrWhiteSpace(device.Name)
+                        ? "Unknown device"
+                        : device.Name;
+                    manufacturerParameter.Value = (object?)device.Manufacturer ?? DBNull.Value;
+                    statusParameter.Value = (object?)device.Status ?? DBNull.Value;
+                    problemCodeParameter.Value = (object?)device.ProblemCode ?? DBNull.Value;
+                    evidenceParameter.Value = device.ProblemCode.HasValue ? 1 : 0;
+
+                    await observationCommand.ExecuteNonQueryAsync(cancellationToken);
+                }
+            }
 
             await transaction.CommitAsync(cancellationToken);
         }
@@ -189,121 +237,260 @@ public sealed class DatabaseService : IDatabaseService
         }
     }
 
-    public async Task<List<DeviceInfo>> GetCachedDevicesAsync()
+    public async Task<ScanSnapshot?> GetLatestScanAsync()
     {
-        var devices = new List<DeviceInfo>();
-
         try
         {
             await using var connection = OpenConnection();
             await connection.OpenAsync();
-
-            await using var command = connection.CreateCommand();
+            var command = connection.CreateCommand();
             command.CommandText = """
-                SELECT Name, DeviceId, Manufacturer, Status, ProblemCode, ProblemCodeEvidenceAvailable
-                FROM Devices ORDER BY Name
+                SELECT ScanId, ScanTimeUtc, DeviceCount
+                FROM ScanSnapshots
+                WHERE IsLatest = 1;
                 """;
-
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
+            long scanId;
+            string scanTimeUtc;
+            int deviceCount;
+            await using (command)
+            await using (var reader = await command.ExecuteReaderAsync())
             {
-                devices.Add(new DeviceInfo
+                if (!await reader.ReadAsync())
                 {
-                    Name = reader.IsDBNull(0) ? "Unknown device" : reader.GetString(0),
-                    DeviceId = reader.IsDBNull(1) ? "" : reader.GetString(1),
-                    Manufacturer = reader.IsDBNull(2) ? "" : reader.GetString(2),
-                    Status = reader.IsDBNull(3) ? "" : reader.GetString(3),
-                    ProblemCode = ReadProblemCode(reader)
-                });
+                    return null;
+                }
+
+                scanId = reader.GetInt64(0);
+                scanTimeUtc = reader.GetString(1);
+                deviceCount = reader.GetInt32(2);
             }
+
+            return await ReadSnapshotAsync(connection, scanId, scanTimeUtc, deviceCount);
         }
         catch (Exception ex)
         {
-            Trace.TraceError($"[DatabaseService] GetCachedDevicesAsync failed: {ex}");
+            Trace.TraceError($"[DatabaseService] GetLatestScanAsync failed: {ex}");
             throw;
         }
+    }
 
-        return devices;
+    public async Task<List<ScanSnapshot>> GetScanHistoryAsync()
+    {
+        var scans = new List<(long Id, string Time, int Count)>();
+        try
+        {
+            await using var connection = OpenConnection();
+            await connection.OpenAsync();
+            var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT ScanId, ScanTimeUtc, DeviceCount
+                FROM ScanSnapshots
+                ORDER BY ScanId DESC;
+                """;
+            await using (command)
+            await using (var reader = await command.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    scans.Add((reader.GetInt64(0), reader.GetString(1), reader.GetInt32(2)));
+                }
+            }
+
+            var snapshots = new List<ScanSnapshot>(scans.Count);
+            foreach (var scan in scans)
+            {
+                snapshots.Add(await ReadSnapshotAsync(connection, scan.Id, scan.Time, scan.Count));
+            }
+
+            return snapshots;
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceError($"[DatabaseService] GetScanHistoryAsync failed: {ex}");
+            throw;
+        }
+    }
+
+    public async Task<List<DeviceInfo>> GetCachedDevicesAsync()
+    {
+        var latestScan = await GetLatestScanAsync();
+        if (latestScan is not null)
+        {
+            return latestScan.Observations.ToList();
+        }
+
+        return await ReadLegacyDevicesAsync(
+            "SELECT Name, DeviceId, Manufacturer, Status, ProblemCode, ProblemCodeEvidenceAvailable FROM Devices ORDER BY Name");
     }
 
     public async Task<List<DeviceInfo>> GetActiveDevicesAsync(string scanTimeUtc)
     {
-        var devices = new List<DeviceInfo>();
-
-        try
+        var scan = await GetScanByTimeAsync(scanTimeUtc);
+        if (scan is not null)
         {
-            await using var connection = OpenConnection();
-            await connection.OpenAsync();
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = """
-                SELECT Name, DeviceId, Manufacturer, Status, ProblemCode, ProblemCodeEvidenceAvailable
-                FROM Devices WHERE LastSeenUtc = $seen ORDER BY Name
-                """;
-            command.Parameters.AddWithValue("$seen", scanTimeUtc);
-
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                devices.Add(new DeviceInfo
-                {
-                    Name = reader.IsDBNull(0) ? "Unknown device" : reader.GetString(0),
-                    DeviceId = reader.IsDBNull(1) ? "" : reader.GetString(1),
-                    Manufacturer = reader.IsDBNull(2) ? "" : reader.GetString(2),
-                    Status = reader.IsDBNull(3) ? "" : reader.GetString(3),
-                    ProblemCode = ReadProblemCode(reader)
-                });
-            }
-        }
-        catch (Exception ex)
-        {
-            Trace.TraceError($"[DatabaseService] GetActiveDevicesAsync failed: {ex}");
-            throw;
+            return scan.Observations.ToList();
         }
 
-        return devices;
+        return await ReadLegacyDevicesAsync(
+            "SELECT Name, DeviceId, Manufacturer, Status, ProblemCode, ProblemCodeEvidenceAvailable FROM Devices WHERE LastSeenUtc = $seen ORDER BY Name",
+            ("$seen", scanTimeUtc));
     }
 
     public async Task<List<DeviceInfo>> GetHistoricalDevicesAsync(string currentScanTimeUtc)
     {
-        var devices = new List<DeviceInfo>();
+        var history = await GetScanHistoryAsync();
+        if (history.Count > 0)
+        {
+            return history
+                .Where(scan => string.CompareOrdinal(scan.ScanTimeUtc, currentScanTimeUtc) < 0)
+                .SelectMany(scan => scan.Observations)
+                .ToList();
+        }
 
+        return await ReadLegacyDevicesAsync(
+            "SELECT Name, DeviceId, Manufacturer, Status, ProblemCode, ProblemCodeEvidenceAvailable FROM Devices WHERE LastSeenUtc < $seen ORDER BY Name",
+            ("$seen", currentScanTimeUtc));
+    }
+
+    private async Task<ScanSnapshot?> GetScanByTimeAsync(string scanTimeUtc)
+    {
+        await using var connection = OpenConnection();
+        await connection.OpenAsync();
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT ScanId, ScanTimeUtc, DeviceCount
+            FROM ScanSnapshots
+            WHERE ScanTimeUtc = $scanTime
+            ORDER BY ScanId DESC
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("$scanTime", scanTimeUtc);
+        long scanId;
+        string matchedScanTimeUtc;
+        int deviceCount;
+        await using (command)
+        await using (var reader = await command.ExecuteReaderAsync())
+        {
+            if (!await reader.ReadAsync())
+            {
+                return null;
+            }
+
+            scanId = reader.GetInt64(0);
+            matchedScanTimeUtc = reader.GetString(1);
+            deviceCount = reader.GetInt32(2);
+        }
+
+        return await ReadSnapshotAsync(connection, scanId, matchedScanTimeUtc, deviceCount);
+    }
+
+    private async Task<List<DeviceInfo>> ReadLegacyDevicesAsync(
+        string query,
+        (string Name, object Value)? parameter = null)
+    {
+        var devices = new List<DeviceInfo>();
         try
         {
             await using var connection = OpenConnection();
             await connection.OpenAsync();
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = """
-                SELECT Name, DeviceId, Manufacturer, Status, ProblemCode, ProblemCodeEvidenceAvailable
-                FROM Devices WHERE LastSeenUtc < $seen ORDER BY Name
-                """;
-            command.Parameters.AddWithValue("$seen", currentScanTimeUtc);
-
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
+            var command = connection.CreateCommand();
+            command.CommandText = query;
+            if (parameter is { } value)
             {
-                devices.Add(new DeviceInfo
+                command.Parameters.AddWithValue(value.Name, value.Value);
+            }
+
+            await using (command)
+            await using (var reader = await command.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
                 {
-                    Name = reader.IsDBNull(0) ? "Unknown device" : reader.GetString(0),
-                    DeviceId = reader.IsDBNull(1) ? "" : reader.GetString(1),
-                    Manufacturer = reader.IsDBNull(2) ? "" : reader.GetString(2),
-                    Status = reader.IsDBNull(3) ? "" : reader.GetString(3),
-                    ProblemCode = ReadProblemCode(reader)
-                });
+                    devices.Add(new DeviceInfo
+                    {
+                        Name = reader.IsDBNull(0) ? "Unknown device" : reader.GetString(0),
+                        DeviceId = reader.IsDBNull(1) ? "" : reader.GetString(1),
+                        Manufacturer = reader.IsDBNull(2) ? "" : reader.GetString(2),
+                        Status = reader.IsDBNull(3) ? "" : reader.GetString(3),
+                        ProblemCode = ReadProblemCode(reader, 4, 5)
+                    });
+                }
             }
         }
         catch (Exception ex)
         {
-            Trace.TraceError($"[DatabaseService] GetHistoricalDevicesAsync failed: {ex}");
+            Trace.TraceError($"[DatabaseService] Legacy device read failed: {ex}");
             throw;
         }
 
         return devices;
     }
 
-    private static uint? ReadProblemCode(SqliteDataReader reader) =>
-        reader.IsDBNull(4) || reader.GetInt64(5) == 0
+    private async Task<ScanSnapshot> ReadSnapshotAsync(
+        SqliteConnection connection,
+        long scanId,
+        string scanTimeUtc,
+        int deviceCount)
+    {
+        var observations = new List<DeviceInfo>(deviceCount);
+        var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT DeviceId, Name, Manufacturer, Status, ProblemCode, ProblemCodeEvidenceAvailable
+            FROM DeviceObservations
+            WHERE ScanId = $scanId
+            ORDER BY ObservationOrdinal;
+            """;
+        command.Parameters.AddWithValue("$scanId", scanId);
+        await using (command)
+        await using (var reader = await command.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                observations.Add(new DeviceInfo
+                {
+                    DeviceId = reader.IsDBNull(0) ? "" : reader.GetString(0),
+                    Name = reader.IsDBNull(1) ? "Unknown device" : reader.GetString(1),
+                    Manufacturer = reader.IsDBNull(2) ? "" : reader.GetString(2),
+                    Status = reader.IsDBNull(3) ? "" : reader.GetString(3),
+                    ProblemCode = ReadProblemCode(reader, 4, 5)
+                });
+            }
+        }
+
+        if (observations.Count != deviceCount)
+        {
+            throw new InvalidDataException(
+                $"Scan {scanId} declares {deviceCount} observations but contains {observations.Count}.");
+        }
+
+        return new ScanSnapshot(scanId, scanTimeUtc, deviceCount, observations);
+    }
+
+    private static async Task<bool> HasColumnAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string tableName,
+        string columnName)
+    {
+        var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"PRAGMA table_info({tableName});";
+        await using (command)
+        await using (var reader = await command.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                if (reader.GetString(1).Equals(columnName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static uint? ReadProblemCode(SqliteDataReader reader, int problemCodeIndex, int evidenceIndex) =>
+        reader.IsDBNull(problemCodeIndex) || reader.GetInt64(evidenceIndex) == 0
             ? null
-            : Convert.ToUInt32(reader.GetInt64(4));
+            : Convert.ToUInt32(reader.GetInt64(problemCodeIndex));
 }
