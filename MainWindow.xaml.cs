@@ -15,6 +15,7 @@ public partial class MainWindow : Window
 {
     private readonly IDeviceScanner _scanner;
     private readonly IDatabaseService _database;
+    private readonly IDiagnosticsService _diagnostics;
     private readonly List<DeviceInfo> _allDevices = new();
     private CancellationTokenSource? _scanCts;
     private int _isScanning = 0;
@@ -22,10 +23,11 @@ public partial class MainWindow : Window
     private bool _isArabic;
     private int _languageIndex = 0;
 
-    public MainWindow(IDeviceScanner scanner, IDatabaseService database)
+    public MainWindow(IDeviceScanner scanner, IDatabaseService database, IDiagnosticsService diagnostics)
     {
         _scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
         _database = database ?? throw new ArgumentNullException(nameof(database));
+        _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
 
         InitializeComponent();
 
@@ -50,7 +52,7 @@ public partial class MainWindow : Window
         };
     }
 
-    public MainWindow() : this(new DeviceScanner(), new DatabaseService())
+    public MainWindow() : this(new DeviceScanner(), new DatabaseService(), new RuleBasedDiagnosticsService())
     {
     }
 
@@ -79,6 +81,7 @@ public partial class MainWindow : Window
         try
         {
             List<DeviceInfo> devices = await _scanner.ScanAsync(token);
+            _diagnostics.EnrichAll(devices, _isArabic);
 
             await _database.SaveScanAsync(devices, token);
 
@@ -92,10 +95,12 @@ public partial class MainWindow : Window
             _allDevices.AddRange(devices);
 
             DeviceCount.Text = devices.Count.ToString();
-            HealthyCount.Text = devices.Count(d => d.ProblemCode == 0).ToString();
-            ProblemCount.Text = devices.Count(d => d.ProblemCode != 0).ToString();
+            HealthyCount.Text = devices.Count(d => d.Diagnostics?.Outcome == DiagnosticOutcome.Healthy).ToString();
+            ProblemCount.Text = devices.Count(d => d.Diagnostics?.Outcome != DiagnosticOutcome.Healthy).ToString();
 
             ApplyFilters(false);
+            DevicesGrid.SelectedIndex = DevicesGrid.Items.Count > 0 ? 0 : -1;
+            UpdateDiagnosticDetails();
 
             StatusText.Text = ScanCompletedMessage(devices.Count);
         }
@@ -148,9 +153,9 @@ public partial class MainWindow : Window
         IEnumerable<DeviceInfo> filtered = _allDevices;
 
         if (FilterBox.SelectedIndex == 1)
-            filtered = filtered.Where(d => d.ProblemCode != 0);
+            filtered = filtered.Where(d => d.Diagnostics?.Outcome != DiagnosticOutcome.Healthy);
         else if (FilterBox.SelectedIndex == 2)
-            filtered = filtered.Where(d => d.ProblemCode == 0);
+            filtered = filtered.Where(d => d.Diagnostics?.Outcome == DiagnosticOutcome.Healthy);
 
         string query = SearchBox.Text.Trim();
 
@@ -160,16 +165,93 @@ public partial class MainWindow : Window
                 (d.Name ?? "").Contains(query, StringComparison.OrdinalIgnoreCase) ||
                 (d.Manufacturer ?? "").Contains(query, StringComparison.OrdinalIgnoreCase) ||
                 (d.DeviceId ?? "").Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                (d.Status ?? "").Contains(query, StringComparison.OrdinalIgnoreCase));
+                (d.Status ?? "").Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                d.DiagnosticSummary.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                d.DiagnosticEvidence.Contains(query, StringComparison.OrdinalIgnoreCase));
         }
 
         List<DeviceInfo> results = filtered.ToList();
         DevicesGrid.ItemsSource = results;
+        UpdateDiagnosticDetails();
 
         if (updateStatus)
         {
             StatusText.Text = FilterResultsMessage(results.Count, _allDevices.Count);
         }
+    }
+
+    private void DevicesGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateDiagnosticDetails();
+    }
+
+    private void UpdateDiagnosticDetails()
+    {
+        if (DiagnosticDetailsExpander is null || DevicesGrid is null)
+        {
+            return;
+        }
+
+        if (DevicesGrid.SelectedItem is not DeviceInfo device || device.Diagnostics is not { } report)
+        {
+            DiagnosticDetailsExpander.IsExpanded = false;
+            return;
+        }
+
+        string problemCode = device.ProblemCode?.ToString() ??
+            Translate("Nicht verfügbar", "غير متاح", "Unavailable", "Indisponible", "No disponible");
+        string status = string.IsNullOrWhiteSpace(device.Status)
+            ? Translate("Nicht verfügbar", "غير متاح", "Unavailable", "Indisponible", "No disponible")
+            : device.Status;
+
+        DiagnosticDetailsExpander.Header = Translate(
+            "Gerätediagnose",
+            "تشخيص الجهاز",
+            "Device diagnostics",
+            "Diagnostic de l’appareil",
+            "Diagnóstico del dispositivo");
+        DiagnosticDeviceText.Text = $"{device.Name} — {device.Manufacturer}";
+        DiagnosticStatusText.Text = string.Format(
+            Translate(
+                "WMI-Status: {0} | Konfigurationscode: {1}",
+                "حالة WMI: {0} | رمز التكوين: {1}",
+                "WMI status: {0} | Configuration code: {1}",
+                "État WMI : {0} | Code de configuration : {1}",
+                "Estado WMI: {0} | Código de configuración: {1}"),
+            status, problemCode);
+        DiagnosticAssessmentText.Text = string.Format(
+            Translate(
+                "Bewertung: {0} | Schweregrad: {1}",
+                "التقييم: {0} | الشدة: {1}",
+                "Assessment: {0} | Severity: {1}",
+                "Évaluation : {0} | Gravité : {1}",
+                "Evaluación: {0} | Gravedad: {1}"),
+            report.OutcomeLabel, report.SeverityLabel);
+        DiagnosticIssueText.Text = string.Format(
+            Translate(
+                "Befund: {0} — {1}",
+                "النتيجة: {0} — {1}",
+                "Detected issue: {0} — {1}",
+                "Constat : {0} — {1}",
+                "Hallazgo: {0} — {1}"),
+            report.Summary, report.Description);
+        DiagnosticEvidenceText.Text = string.Format(
+            Translate(
+                "Belege: {0}",
+                "الأدلة: {0}",
+                "Evidence: {0}",
+                "Éléments probants : {0}",
+                "Evidencia: {0}"),
+            report.Evidence);
+        DiagnosticRecommendationText.Text = string.Format(
+            Translate(
+                "Nächster Schritt: {0}",
+                "الخطوة التالية: {0}",
+                "Next step: {0}",
+                "Étape suivante : {0}",
+                "Siguiente paso: {0}"),
+            report.SafeRecommendation);
+        DiagnosticDetailsExpander.IsExpanded = true;
     }
 
     private string Translate(string de, string ar, string en, string fr, string es)
@@ -332,11 +414,11 @@ public partial class MainWindow : Window
 
         string[] problemLabels =
         {
-            "Gemeldete Probleme",
-            "مشاكل مسجلة",
-            "Reported problems",
-            "Problèmes signalés",
-            "Problemas detectados"
+            "Probleme / unbekannt",
+            "مشاكل / غير معروف",
+            "Issues / unknown",
+            "Problèmes / inconnus",
+            "Problemas / desconocido"
         };
 
         string[] searchLabels =
@@ -359,29 +441,29 @@ public partial class MainWindow : Window
 
         string[][] filterOptions =
         {
-            new[] { "Alle Geräte", "Nur mit Problemen", "Ohne Probleme" },
-            new[] { "كل الأجهزة", "الأجهزة التي بها مشاكل", "الأجهزة السليمة" },
-            new[] { "All devices", "Devices with problems", "Devices without problems" },
-            new[] { "Tous les appareils", "Avec problèmes", "Sans problème" },
-            new[] { "Todos los dispositivos", "Con problemas", "Sin problemas" }
+            new[] { "Alle Geräte", "Probleme oder unbekannt", "Ohne gemeldete Probleme" },
+            new[] { "كل الأجهزة", "مشاكل أو حالة غير معروفة", "دون مشاكل مُبلّغ عنها" },
+            new[] { "All devices", "Issues or unknown", "No reported issues" },
+            new[] { "Tous les appareils", "Problèmes ou inconnus", "Aucun problème signalé" },
+            new[] { "Todos los dispositivos", "Problemas o desconocidos", "Sin problemas reportados" }
         };
 
         string[] searchTooltips =
         {
-            "Suche nach Name oder Hersteller",
-            "ابحث بالاسم أو الشركة المصنعة",
-            "Search by name or manufacturer",
-            "Rechercher par nom ou fabricant",
-            "Buscar por nombre o fabricante"
+            "Suche nach Name, Hersteller oder Diagnose",
+            "ابحث بالاسم أو الشركة المصنعة أو التشخيص",
+            "Search by name, manufacturer, or diagnostic finding",
+            "Rechercher par nom, fabricant ou constat",
+            "Buscar por nombre, fabricante o diagnóstico"
         };
 
         string[][] columnHeaders =
         {
-            new[] { "Gerät", "Hersteller", "Status", "Problemcode", "Bewertung" },
-            new[] { "الجهاز", "الشركة المصنعة", "الحالة", "رمز المشكلة", "التقييم" },
-            new[] { "Device", "Manufacturer", "Status", "Problem code", "Health" },
-            new[] { "Appareil", "Fabricant", "État", "Code erreur", "Évaluation" },
-            new[] { "Dispositivo", "Fabricante", "Estado", "Código de problema", "Evaluación" }
+            new[] { "Gerät", "Hersteller", "WMI-Status", "Problemcode", "Bewertung", "Schweregrad", "Befund" },
+            new[] { "الجهاز", "الشركة المصنعة", "حالة WMI", "رمز المشكلة", "التقييم", "الشدة", "النتيجة" },
+            new[] { "Device", "Manufacturer", "WMI status", "Problem code", "Assessment", "Severity", "Finding" },
+            new[] { "Appareil", "Fabricant", "État WMI", "Code erreur", "Évaluation", "Gravité", "Constat" },
+            new[] { "Dispositivo", "Fabricante", "Estado WMI", "Código", "Evaluación", "Gravedad", "Hallazgo" }
         };
 
         // Sidebar translations
@@ -455,10 +537,12 @@ public partial class MainWindow : Window
 
         SearchBox.ToolTip = searchTooltips[languageIndex];
 
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < 7; i++)
             DevicesGrid.Columns[i].Header = columnHeaders[languageIndex][i];
 
+        _diagnostics.EnrichAll(_allDevices, _isArabic);
         ApplyFilters(false);
+        UpdateDiagnosticDetails();
         EditionLabel.Text = editionLabels[languageIndex];
         DashboardButton.Content = dashboardLabels[languageIndex];
         InventoryButton.Content = inventoryLabels[languageIndex];

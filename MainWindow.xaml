@@ -227,6 +227,7 @@
     <RowDefinition Height="Auto"/>
     <RowDefinition Height="*"/>
     <RowDefinition Height="Auto"/>
+    <RowDefinition Height="Auto"/>
    </Grid.RowDefinitions>
 
    <!-- HEADER -->
@@ -301,7 +302,7 @@
        Foreground="#F2B76D" FontSize="10"
        FontWeight="Bold"/>
       <TextBlock x:Name="ProblemLabel"
-       Text="Gemeldete Probleme"
+       Text="Probleme / unbekannt"
        Foreground="#AABAC9" Margin="0,10,0,0"/>
       <TextBlock x:Name="ProblemCount"
        Text="0" FontSize="32"
@@ -346,8 +347,8 @@
       SelectedIndex="0"
       SelectionChanged="FilterBox_SelectionChanged">
       <ComboBoxItem Content="Alle Geräte"/>
-      <ComboBoxItem Content="Nur mit Problemen"/>
-      <ComboBoxItem Content="Ohne Probleme"/>
+      <ComboBoxItem Content="Probleme oder unbekannt"/>
+      <ComboBoxItem Content="Ohne gemeldete Probleme"/>
      </ComboBox>
     </Grid>
    </Border>
@@ -373,25 +374,61 @@
      AlternatingRowBackground="#202F3D"
      RowHeaderWidth="0"
      SelectionMode="Single"
-     SelectionUnit="FullRow">
+     SelectionUnit="FullRow"
+     SelectionChanged="DevicesGrid_SelectionChanged">
 
      <DataGrid.Columns>
       <DataGridTextColumn Header="Gerät"
        Binding="{Binding Name}" Width="2*"/>
       <DataGridTextColumn Header="Hersteller"
        Binding="{Binding Manufacturer}" Width="*"/>
-      <DataGridTextColumn Header="Status"
+      <DataGridTextColumn Header="WMI-Status"
        Binding="{Binding Status}" Width="*"/>
       <DataGridTextColumn Header="Problemcode"
        Binding="{Binding ProblemCode}" Width="*"/>
       <DataGridTextColumn Header="Bewertung"
        Binding="{Binding Health}" Width="*"/>
+      <DataGridTextColumn Header="Schweregrad"
+       Binding="{Binding DiagnosticSeverity}" Width="*"/>
+      <DataGridTextColumn Header="Gemeldeter Befund"
+       Binding="{Binding DiagnosticSummary}" Width="2*"/>
      </DataGrid.Columns>
     </DataGrid>
    </Border>
 
+   <Expander x:Name="DiagnosticDetailsExpander"
+    Grid.Row="4"
+    Header="Ausgewählte Gerätediagnose"
+    Foreground="#36D6D0"
+    IsExpanded="False"
+    Margin="0,10,0,0">
+    <Border Background="#C5182736"
+     BorderBrush="#3036D6D0"
+     BorderThickness="1"
+     CornerRadius="10"
+     Padding="12">
+     <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="145">
+      <StackPanel>
+       <TextBlock x:Name="DiagnosticDeviceText"
+        Foreground="#F4F7FB" FontWeight="SemiBold"
+        TextWrapping="Wrap" Margin="0,0,0,5"/>
+       <TextBlock x:Name="DiagnosticStatusText"
+        Foreground="#AABAC9" TextWrapping="Wrap" Margin="0,0,0,4"/>
+       <TextBlock x:Name="DiagnosticAssessmentText"
+        Foreground="#AABAC9" TextWrapping="Wrap" Margin="0,0,0,4"/>
+       <TextBlock x:Name="DiagnosticIssueText"
+        Foreground="#E2EAF2" TextWrapping="Wrap" Margin="0,0,0,4"/>
+       <TextBlock x:Name="DiagnosticEvidenceText"
+        Foreground="#AABAC9" TextWrapping="Wrap" Margin="0,0,0,4"/>
+       <TextBlock x:Name="DiagnosticRecommendationText"
+        Foreground="#AABAC9" TextWrapping="Wrap"/>
+      </StackPanel>
+     </ScrollViewer>
+    </Border>
+   </Expander>
+
    <!-- FOOTER -->
-   <Border Grid.Row="4"
+   <Border Grid.Row="5"
     Background="#A8172635"
     CornerRadius="8"
     Padding="10,8" Margin="0,10,0,0">
