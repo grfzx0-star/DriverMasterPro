@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Management;
 using DriverMasterPro.Models;
 using DriverMasterPro.Services.Abstractions;
 
@@ -15,10 +14,21 @@ public sealed class DeviceScanner : IDeviceScanner
     /// Timeout applied to individual WMI batch packet retrievals (IEnumWbemClassObject::Next).
     /// Note: This is NOT the total scan timeout. Total timeout is governed by the caller's CancellationToken.
     /// </summary>
-    public static readonly TimeSpan WmiBatchPacketTimeout = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan WmiBatchPacketTimeout = WmiDeviceInventoryProvider.BatchPacketTimeout;
+
+    private readonly IDeviceInventoryProvider _inventoryProvider;
+
+    public DeviceScanner(IDeviceInventoryProvider inventoryProvider)
+    {
+        _inventoryProvider = inventoryProvider ?? throw new ArgumentNullException(nameof(inventoryProvider));
+    }
+
+    public DeviceScanner() : this(new WmiDeviceInventoryProvider())
+    {
+    }
 
     /// <summary>
-    /// Executes a read-only hardware enumeration query against Win32_PnPEntity.
+    /// Executes a read-only inventory scan and sorts the results by device name.
     ///
     /// CANCELLATION GUARANTEES &amp; LIMITATIONS:
     /// - Cooperative cancellation is evaluated before starting and between item iterations.
@@ -29,58 +39,17 @@ public sealed class DeviceScanner : IDeviceScanner
     /// </summary>
     public Task<List<DeviceInfo>> ScanAsync(CancellationToken cancellationToken = default) => Task.Run(() =>
     {
-        var devices = new List<DeviceInfo>();
-
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            using var searcher = new ManagementObjectSearcher(
-                "SELECT Name, DeviceID, PNPDeviceID, Manufacturer, Status, ConfigManagerErrorCode FROM Win32_PnPEntity")
-            {
-                Options = new EnumerationOptions
-                {
-                    ReturnImmediately = true,
-                    Timeout = WmiBatchPacketTimeout
-                }
-            };
-
-            using var results = searcher.Get();
-
-            foreach (ManagementObject item in results)
-            {
-                using (item) // Ensure unmanaged COM wrapper is disposed
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    // Prioritize PNPDeviceID; fallback to WMI Key property DeviceID if PNPDeviceID is absent
-                    string pnpId = Convert.ToString(item["PNPDeviceID"])?.Trim() ?? "";
-                    string devId = Convert.ToString(item["DeviceID"])?.Trim() ?? "";
-                    string persistentId = !string.IsNullOrEmpty(pnpId) ? pnpId : devId;
-
-                    devices.Add(new DeviceInfo
-                    {
-                        Name = Convert.ToString(item["Name"])?.Trim() ?? "Unknown device",
-                        DeviceId = persistentId,
-                        Manufacturer = Convert.ToString(item["Manufacturer"])?.Trim() ?? "",
-                        Status = Convert.ToString(item["Status"])?.Trim() ?? "",
-                        ProblemCode = item["ConfigManagerErrorCode"] is null
-                            ? 0u : Convert.ToUInt32(item["ConfigManagerErrorCode"])
-                    });
-                }
-            }
-
+            var devices = _inventoryProvider.GetDevices(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             return devices.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList();
         }
         catch (OperationCanceledException)
         {
             Trace.TraceWarning("[DeviceScanner] ScanAsync operation was cancelled.");
             throw;
-        }
-        catch (ManagementException mex)
-        {
-            Trace.TraceError($"[DeviceScanner] WMI enumeration error ({mex.ErrorCode}): {mex.Message}");
-            throw new InvalidOperationException($"WMI-Abfrage fehlgeschlagen: {mex.Message}", mex);
         }
         catch (Exception ex)
         {

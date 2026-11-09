@@ -19,6 +19,7 @@ public partial class App : Application
             {
                 // Register Core Services with appropriate lifetimes
                 services.AddSingleton<IDatabaseService, DatabaseService>();
+                services.AddTransient<IDeviceInventoryProvider, WmiDeviceInventoryProvider>();
                 services.AddTransient<IDeviceScanner, DeviceScanner>();
 
                 // Register Views

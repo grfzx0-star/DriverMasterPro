@@ -65,14 +65,47 @@ jobs:
       - name: .NET info
         run: dotnet --info
 
-      - name: Restore application
-        run: dotnet restore .\DriverMasterPro.csproj
+      - name: Restore application and tests
+        run: dotnet restore .\tests\DriverMasterPro.Tests\DriverMasterPro.Tests.csproj
 
       - name: Build application (Release)
         run: dotnet build .\DriverMasterPro.csproj --configuration Release --no-restore
 
-      - name: Build test harness (Release)
-        run: dotnet build .\tests\DriverMasterPro.Tests\DriverMasterPro.Tests.csproj --configuration Release
+      - name: Build test project (Release)
+        run: dotnet build .\tests\DriverMasterPro.Tests\DriverMasterPro.Tests.csproj --configuration Release --no-restore
 
-      - name: Execute custom test harness (Release)
-        run: dotnet run --project .\tests\DriverMasterPro.Tests\DriverMasterPro.Tests.csproj --configuration Release --no-build --no-restore
+      - name: Execute automated tests (Release)
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $resultsDirectory = Join-Path $env:RUNNER_TEMP ("DriverMasterPro-TestResults-" + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $resultsDirectory -Force | Out-Null
+
+          dotnet test .\tests\DriverMasterPro.Tests\DriverMasterPro.Tests.csproj `
+            --configuration Release --no-build --no-restore `
+            --filter "Category!=WmiIntegration" `
+            --results-directory $resultsDirectory `
+            --logger "console;verbosity=normal" `
+            --logger "trx;LogFileName=automated-tests.trx"
+          if ($LASTEXITCODE -ne 0) {
+            throw "dotnet test failed with exit code $LASTEXITCODE."
+          }
+
+          $trxPath = Join-Path $resultsDirectory 'automated-tests.trx'
+          if (-not (Test-Path $trxPath)) {
+            throw "Test result file was not produced: $trxPath"
+          }
+
+          [xml]$trx = Get-Content -LiteralPath $trxPath -Raw
+          $counters = $trx.TestRun.ResultSummary.Counters
+          if ($null -eq $counters) {
+            throw "Test result file has no execution counters."
+          }
+
+          $total = [int]$counters.GetAttribute('total')
+          $passed = [int]$counters.GetAttribute('passed')
+          $failed = [int]$counters.GetAttribute('failed')
+          $notExecuted = [int]$counters.GetAttribute('notExecuted')
+          Write-Host "CI test results: total=$total passed=$passed failed=$failed skipped=$notExecuted"
+          if ($total -le 0 -or $passed -ne $total -or $failed -ne 0) {
+            throw "Test result gate failed: require at least one test, all tests passed, and no failures or skips."
+          }

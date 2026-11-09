@@ -94,6 +94,7 @@ public sealed class DatabaseService : IDatabaseService
             var pSeen = command.Parameters.Add("$seen", SqliteType.Text);
 
             var nowIso = DateTime.UtcNow.ToString("O");
+            var scanObservationId = Guid.NewGuid().ToString("N");
             var seenPersistentIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             int observationCounter = 0;
 
@@ -109,7 +110,7 @@ public sealed class DatabaseService : IDatabaseService
                     // Device genuinely lacks a verified persistent hardware identifier.
                     // Represent as a scan-specific observation anchored to this scan session,
                     // rather than fabricating a false persistent hardware identity.
-                    resolvedId = $"OBSERVATION:{nowIso}:{device.Name}#{observationCounter++}";
+                    resolvedId = $"OBSERVATION:{scanObservationId}:{device.Name}#{observationCounter++}";
                 }
                 else
                 {
@@ -120,7 +121,7 @@ public sealed class DatabaseService : IDatabaseService
                     // as scan-specific duplicates to preserve database integrity.
                     if (!seenPersistentIds.Add(resolvedId))
                     {
-                        resolvedId = $"{resolvedId}#DUP-OBSERVATION:{nowIso}:{observationCounter++}";
+                        resolvedId = $"{resolvedId}#DUP-OBSERVATION:{scanObservationId}:{observationCounter++}";
                     }
                 }
 
