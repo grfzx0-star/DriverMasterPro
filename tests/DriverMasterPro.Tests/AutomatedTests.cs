@@ -195,7 +195,7 @@ public sealed class DatabaseServiceTests : IAsyncLifetime
         Assert.Equal(2, cached.Count);
         var persistedWifi = Assert.Single(cached, device => device.DeviceId == wifi.DeviceId);
         Assert.Equal("Error", persistedWifi.Status);
-        Assert.Equal(10u, persistedWifi.ProblemCode);
+        Assert.Equal<uint?>(10u, persistedWifi.ProblemCode);
     }
 
     [Fact]

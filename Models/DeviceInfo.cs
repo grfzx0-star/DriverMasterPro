@@ -6,7 +6,7 @@ public sealed class DeviceInfo
     public string DeviceId { get; set; } = "";
     public string Manufacturer { get; set; } = "";
     public string Status { get; set; } = "";
-    public uint ProblemCode { get; set; }
+    public uint? ProblemCode { get; set; }
     public string Health => ProblemCode == 0 ? "OK" : $"Problem {ProblemCode}";
 
     public DiagnosticReport? Diagnostics { get; set; }

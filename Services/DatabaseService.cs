@@ -46,6 +46,7 @@ public sealed class DatabaseService : IDatabaseService
                     Manufacturer TEXT,
                     Status TEXT,
                     ProblemCode INTEGER,
+                    ProblemCodeEvidenceAvailable INTEGER NOT NULL DEFAULT 1,
                     LastSeenUtc TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS ScanHistory (
@@ -56,6 +57,37 @@ public sealed class DatabaseService : IDatabaseService
                 CREATE INDEX IF NOT EXISTS IX_Devices_LastSeenUtc ON Devices(LastSeenUtc);
                 """;
             await command.ExecuteNonQueryAsync();
+
+            var hasProblemCodeEvidenceColumn = false;
+            await using (var schemaCommand = connection.CreateCommand())
+            {
+                schemaCommand.CommandText = "PRAGMA table_info(Devices);";
+                await using var reader = await schemaCommand.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    if (reader.GetString(1).Equals("ProblemCodeEvidenceAvailable", StringComparison.OrdinalIgnoreCase))
+                    {
+                        hasProblemCodeEvidenceColumn = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!hasProblemCodeEvidenceColumn)
+            {
+                await using var migrationTransaction = await connection.BeginTransactionAsync();
+                await using var migrationCommand = connection.CreateCommand();
+                migrationCommand.Transaction = (SqliteTransaction)migrationTransaction;
+                migrationCommand.CommandText = """
+                    ALTER TABLE Devices
+                    ADD COLUMN ProblemCodeEvidenceAvailable INTEGER NOT NULL DEFAULT 1;
+                    UPDATE Devices
+                    SET ProblemCodeEvidenceAvailable = 0
+                    WHERE ProblemCode = 0;
+                    """;
+                await migrationCommand.ExecuteNonQueryAsync();
+                await migrationTransaction.CommitAsync();
+            }
         }
         catch (Exception ex)
         {
@@ -78,11 +110,14 @@ public sealed class DatabaseService : IDatabaseService
             await using var command = connection.CreateCommand();
             command.Transaction = (SqliteTransaction)transaction;
             command.CommandText = """
-                INSERT INTO Devices(DeviceId, Name, Manufacturer, Status, ProblemCode, LastSeenUtc)
-                VALUES($id, $name, $manufacturer, $status, $problem, $seen)
+                INSERT INTO Devices(
+                    DeviceId, Name, Manufacturer, Status, ProblemCode,
+                    ProblemCodeEvidenceAvailable, LastSeenUtc)
+                VALUES($id, $name, $manufacturer, $status, $problem, $problemEvidence, $seen)
                 ON CONFLICT(DeviceId) DO UPDATE SET
                     Name=excluded.Name, Manufacturer=excluded.Manufacturer,
                     Status=excluded.Status, ProblemCode=excluded.ProblemCode,
+                    ProblemCodeEvidenceAvailable=excluded.ProblemCodeEvidenceAvailable,
                     LastSeenUtc=excluded.LastSeenUtc;
                 """;
 
@@ -91,11 +126,12 @@ public sealed class DatabaseService : IDatabaseService
             var pManufacturer = command.Parameters.Add("$manufacturer", SqliteType.Text);
             var pStatus = command.Parameters.Add("$status", SqliteType.Text);
             var pProblem = command.Parameters.Add("$problem", SqliteType.Integer);
+            var pProblemEvidence = command.Parameters.Add("$problemEvidence", SqliteType.Integer);
             var pSeen = command.Parameters.Add("$seen", SqliteType.Text);
 
             var nowIso = DateTime.UtcNow.ToString("O");
             var scanObservationId = Guid.NewGuid().ToString("N");
-            var seenPersistentIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var seenDeviceIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             int observationCounter = 0;
 
             foreach (var device in devices)
@@ -107,19 +143,15 @@ public sealed class DatabaseService : IDatabaseService
 
                 if (string.IsNullOrEmpty(rawId))
                 {
-                    // Device genuinely lacks a verified persistent hardware identifier.
-                    // Represent as a scan-specific observation anchored to this scan session,
-                    // rather than fabricating a false persistent hardware identity.
+                    // Keep devices without a supplied identifier as separate scan observations.
                     resolvedId = $"OBSERVATION:{scanObservationId}:{device.Name}#{observationCounter++}";
                 }
                 else
                 {
                     resolvedId = rawId;
 
-                    // If identical physical DeviceId appears more than once in the same scan batch,
-                    // keep the first as the primary hardware anchor and record subsequent instances
-                    // as scan-specific duplicates to preserve database integrity.
-                    if (!seenPersistentIds.Add(resolvedId))
+                    // Preserve repeated IDs as separate observations without inferring physical identity.
+                    if (!seenDeviceIds.Add(resolvedId))
                     {
                         resolvedId = $"{resolvedId}#DUP-OBSERVATION:{scanObservationId}:{observationCounter++}";
                     }
@@ -129,7 +161,8 @@ public sealed class DatabaseService : IDatabaseService
                 pName.Value = string.IsNullOrWhiteSpace(device.Name) ? "Unknown device" : device.Name;
                 pManufacturer.Value = (object?)device.Manufacturer ?? DBNull.Value;
                 pStatus.Value = (object?)device.Status ?? DBNull.Value;
-                pProblem.Value = device.ProblemCode;
+                pProblem.Value = (object?)device.ProblemCode ?? DBNull.Value;
+                pProblemEvidence.Value = device.ProblemCode is null ? 0 : 1;
                 pSeen.Value = nowIso;
 
                 await command.ExecuteNonQueryAsync(cancellationToken);
@@ -166,7 +199,10 @@ public sealed class DatabaseService : IDatabaseService
             await connection.OpenAsync();
 
             await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT Name, DeviceId, Manufacturer, Status, ProblemCode FROM Devices ORDER BY Name";
+            command.CommandText = """
+                SELECT Name, DeviceId, Manufacturer, Status, ProblemCode, ProblemCodeEvidenceAvailable
+                FROM Devices ORDER BY Name
+                """;
 
             await using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
@@ -177,7 +213,7 @@ public sealed class DatabaseService : IDatabaseService
                     DeviceId = reader.IsDBNull(1) ? "" : reader.GetString(1),
                     Manufacturer = reader.IsDBNull(2) ? "" : reader.GetString(2),
                     Status = reader.IsDBNull(3) ? "" : reader.GetString(3),
-                    ProblemCode = reader.IsDBNull(4) ? 0u : Convert.ToUInt32(reader.GetInt64(4))
+                    ProblemCode = ReadProblemCode(reader)
                 });
             }
         }
@@ -200,7 +236,10 @@ public sealed class DatabaseService : IDatabaseService
             await connection.OpenAsync();
 
             await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT Name, DeviceId, Manufacturer, Status, ProblemCode FROM Devices WHERE LastSeenUtc = $seen ORDER BY Name";
+            command.CommandText = """
+                SELECT Name, DeviceId, Manufacturer, Status, ProblemCode, ProblemCodeEvidenceAvailable
+                FROM Devices WHERE LastSeenUtc = $seen ORDER BY Name
+                """;
             command.Parameters.AddWithValue("$seen", scanTimeUtc);
 
             await using var reader = await command.ExecuteReaderAsync();
@@ -212,7 +251,7 @@ public sealed class DatabaseService : IDatabaseService
                     DeviceId = reader.IsDBNull(1) ? "" : reader.GetString(1),
                     Manufacturer = reader.IsDBNull(2) ? "" : reader.GetString(2),
                     Status = reader.IsDBNull(3) ? "" : reader.GetString(3),
-                    ProblemCode = reader.IsDBNull(4) ? 0u : Convert.ToUInt32(reader.GetInt64(4))
+                    ProblemCode = ReadProblemCode(reader)
                 });
             }
         }
@@ -235,7 +274,10 @@ public sealed class DatabaseService : IDatabaseService
             await connection.OpenAsync();
 
             await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT Name, DeviceId, Manufacturer, Status, ProblemCode FROM Devices WHERE LastSeenUtc < $seen ORDER BY Name";
+            command.CommandText = """
+                SELECT Name, DeviceId, Manufacturer, Status, ProblemCode, ProblemCodeEvidenceAvailable
+                FROM Devices WHERE LastSeenUtc < $seen ORDER BY Name
+                """;
             command.Parameters.AddWithValue("$seen", currentScanTimeUtc);
 
             await using var reader = await command.ExecuteReaderAsync();
@@ -247,7 +289,7 @@ public sealed class DatabaseService : IDatabaseService
                     DeviceId = reader.IsDBNull(1) ? "" : reader.GetString(1),
                     Manufacturer = reader.IsDBNull(2) ? "" : reader.GetString(2),
                     Status = reader.IsDBNull(3) ? "" : reader.GetString(3),
-                    ProblemCode = reader.IsDBNull(4) ? 0u : Convert.ToUInt32(reader.GetInt64(4))
+                    ProblemCode = ReadProblemCode(reader)
                 });
             }
         }
@@ -259,4 +301,9 @@ public sealed class DatabaseService : IDatabaseService
 
         return devices;
     }
+
+    private static uint? ReadProblemCode(SqliteDataReader reader) =>
+        reader.IsDBNull(4) || reader.GetInt64(5) == 0
+            ? null
+            : Convert.ToUInt32(reader.GetInt64(4));
 }

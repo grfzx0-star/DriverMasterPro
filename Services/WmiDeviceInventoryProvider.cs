@@ -18,7 +18,7 @@ public sealed class WmiDeviceInventoryProvider : IDeviceInventoryProvider
             cancellationToken.ThrowIfCancellationRequested();
 
             using var searcher = new ManagementObjectSearcher(
-                "SELECT Name, DeviceID, PNPDeviceID, Manufacturer, Status, ConfigManagerErrorCode FROM Win32_PnPEntity")
+                "SELECT Name, PNPDeviceID, Manufacturer, Status, ConfigManagerErrorCode FROM Win32_PnPEntity")
             {
                 Options = new EnumerationOptions
                 {
@@ -36,17 +36,17 @@ public sealed class WmiDeviceInventoryProvider : IDeviceInventoryProvider
                     cancellationToken.ThrowIfCancellationRequested();
 
                     string pnpId = Convert.ToString(item["PNPDeviceID"])?.Trim() ?? "";
-                    string devId = Convert.ToString(item["DeviceID"])?.Trim() ?? "";
-                    string persistentId = !string.IsNullOrEmpty(pnpId) ? pnpId : devId;
+                    object? rawProblemCode = item["ConfigManagerErrorCode"];
 
                     devices.Add(new DeviceInfo
                     {
                         Name = Convert.ToString(item["Name"])?.Trim() ?? "Unknown device",
-                        DeviceId = persistentId,
+                        DeviceId = pnpId,
                         Manufacturer = Convert.ToString(item["Manufacturer"])?.Trim() ?? "",
                         Status = Convert.ToString(item["Status"])?.Trim() ?? "",
-                        ProblemCode = item["ConfigManagerErrorCode"] is null
-                            ? 0u : Convert.ToUInt32(item["ConfigManagerErrorCode"])
+                        ProblemCode = rawProblemCode is null or DBNull
+                            ? null
+                            : Convert.ToUInt32(rawProblemCode)
                     });
                 }
             }
