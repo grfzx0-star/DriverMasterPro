@@ -30,7 +30,7 @@ Four-step execution plan, each step executed only under explicit authorization:
 | 1 | Fix `.gitignore` encoding + protect `.recovery/` | COMPLETE |
 | 2 | Remove 899 tracked build files from Git index | COMPLETE |
 | 3A | Local Release build + all tests (isolated outputs) | COMPLETE |
-| 3B | Verify on GitHub Actions (`windows-latest`) | **UNVERIFIED** |
+| 3B | Verify on GitHub Actions (`windows-latest`) | COMPLETE (success) |
 | 4 | This report | COMPLETE |
 
 **Rules honored throughout:** no commit, no push, no history rewrite, no
@@ -148,15 +148,41 @@ expand to 45 test cases including data rows — arithmetically consistent.)
 
 ---
 
-## 6. Step 3B — GitHub Actions (UNVERIFIED)
+## 6. Step 3B — GitHub Actions (COMPLETE)
 
-**Status: UNVERIFIED.** The CI run has NOT been executed.
+**Status: COMPLETE — real CI run is green.**
 
-- Reason: `gh` CLI is not installed and `windows-latest` cannot be run
-  locally; verification requires a push, which is outside scope.
-- Local green does **not** prove `windows-latest` green:
-  - risk of `thread.Join(5s)` timeout/flake under runner load;
-  - WPF `Dispatcher` initialization on a headless runner session.
+Original status was UNVERIFIED because `gh` was not installed and
+`windows-latest` cannot be run locally. That gap is now closed by an
+actual push (see §11).
+
+### Evidence (measured, not inferred)
+
+| Item | Value |
+|------|-------|
+| Workflow | `DriverMasterPro CI` |
+| Run id | `44962917097` |
+| Commit | `9ede901` |
+| Runner | `windows-latest`, .NET 10, Release |
+| Duration | 1m16s (`23:40:17Z` → `23:41:16Z`) |
+| Job conclusion | `success` |
+
+Every step reported `success`:
+
+```
+Set up job -> Checkout repository -> Print checked-out commit identity
+-> Setup .NET 10 -> .NET info -> Restore application and tests
+-> Build application (Release) -> Build test project (Release)
+-> Execute automated tests (Release) -> Post steps -> Complete job
+```
+
+The TRX gate (§5) runs *inside* `Execute automated tests (Release)` and did
+not reject, so on the runner: `total=45 passed=45 failed=0 notExecuted=0`.
+
+### Risks that did NOT materialize
+
+- `thread.Join(5s)` WPF timeout under runner load — no flake observed.
+- WPF `Dispatcher` initialization on a headless runner session — fine.
 
 ---
 
@@ -169,10 +195,11 @@ expand to 45 test cases including data rows — arithmetically consistent.)
 | 3 | No `upload-artifact` of TRX on failure → hard to debug | Medium |
 | 4 | No NuGet caching → slower runs | Low |
 | 5 | `.git` ~353 MB — 899 build blobs still in history; requires `git filter-repo`/rewrite (not authorized) | Medium |
-| 6 | HEAD commit message is a stray instruction echo (`0828844`) | Low |
+| 6 | ~~HEAD commit message is a stray instruction echo (`0828844`)~~ — **CLOSED**: squashed away before push; never published | Low |
 | 7 | YAML validated structurally only (no YAML parser available locally) | Low |
-| 8 | `DriverMasterProNote.txt` is staged `A` but deleted from disk (`AD`) — must be resolved before any commit | High |
-| 9 | Working tree contains untracked junk: `Eingefügter Text(20261121-123117).txt`, `PowerShell Profile/Function.txt`, stray file `t .testsDriverMasterPro…` | Medium |
+| 8 | ~~`DriverMasterProNote.txt` is staged `A` but deleted from disk (`AD`)~~ — **CLOSED**: removed from index, content preserved in backup | High |
+| 9 | ~~Working tree contains untracked/stray junk files~~ — **CLOSED**: all removed; only `?? dotnet.yml` (intentional) remains | Medium |
+| 10 | **`dotnet test` from the repo root runs ZERO tests and still exits 0** — there is no `.sln`, so the nearest project is `DriverMasterPro.csproj`. A human sees a green exit code and concludes the suite passed. CI is immune (it targets `tests/DriverMasterPro.Tests/*.csproj` explicitly and gates on TRX counters). | High |
 
 ---
 
@@ -180,11 +207,12 @@ expand to 45 test cases including data rows — arithmetically consistent.)
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
-| CI fails on WPF timeout | Medium | Medium | Run real CI (Step 3B); raise `Join` timeout or use `AsyncContext` |
+| CI fails on WPF timeout | Low (was Medium) | Medium | **Mitigated & observed green** on `windows-latest` (run `44962917097`); still raise `Join` timeout if it ever flakes |
 | Future skip breaks CI | High once used | Low | Relax gate to `failed=0 && passed>0`, add allowed-skip budget |
 | Push to main without CI | Certain (soon) | High | Add `main` to push triggers |
 | Repo stays bloated | Certain | Medium | Commit Step 2 result; optional history rewrite (separate authorization) |
-| Junk files committed by accident | Medium | Low | Decide fate of the 3 stray files before next commit |
+| Junk files committed by accident | Low | Low | **Mitigated** — stray files removed, `.gitignore` rule 22 added |
+| Human runs `dotnet test` at root, sees exit 0, assumes green | High | Medium | Add a `.sln`, or document the explicit test-project path in `README.md` (finding 10) |
 
 ---
 
@@ -197,24 +225,87 @@ expand to 45 test cases including data rows — arithmetically consistent.)
 - TRX counters valid; gate logic replays correctly.
 - Index cleanup exact: 945→46, 899 staged deletions, 899 files on disk.
 - Pre-existing staged changes preserved.
-- No commits, no push, no source edits outside scope.
+- **Real GitHub Actions run green**: run `44962917097`, commit `9ede901`,
+  1m16s, all steps `success` (Step 3B closed).
+- **WPF tests pass on a headless `windows-latest` runner** (9/9 inside 45/45).
+- **Push payload measured**: 559.5 MB → 0.18 MB (780 build blobs collapsed
+  out of history before push).
+- **Remote tree verified**: 42 tracked files, 0 build files, 0 stray files,
+  0 commits containing the stray `OLLAMA` message.
 
 **UNVERIFIED / requires future action:**
-- GitHub Actions run (Step 3B).
-- WPF tests under headless runner.
-- Repository size after commit/push.
 - Full YAML parse (only structural check done).
+- Local `.git` remains ~353 MB (build blobs still in *local* history) until an
+  authorized history rewrite. The remote is already clean.
+- Real WMI behaviour on the runner (no integration test exists yet).
 
 ---
 
 ## 10. Recommended Next Steps (requires separate authorizations)
 
-1. Resolve `DriverMasterProNote.txt` (keep/remove) and the 3 junk files.
-2. Commit Step 1 + Step 2 result on `feature/v0.2-foundation`; push; watch CI (Step 3B).
-3. Fix workflow: add `main` push trigger, relax skip gate, upload TRX artifacts, add NuGet caching.
-4. Optional (separate high-risk decision): history rewrite to drop build blobs (`.git` 353 MB → small).
+1. ~~Resolve `DriverMasterProNote.txt` and the stray files~~ — DONE (§7, 8–9).
+2. ~~Commit, push, watch CI (Step 3B)~~ — DONE (§11).
+3. Add `tests/DriverMasterPro.IntegrationTests/` with real WMI coverage
+   (structure approved, not implemented; needs `InternalsVisibleTo` + a CI job).
+4. WPF-UI 4.3 **Phase 1 (theming only)** — architecture approved, not authorized.
+   Must prove resource loading works in the test harness that creates no `Application`.
+5. Fix workflow: add `main` push trigger, relax the skip gate, upload TRX
+   artifacts, add NuGet caching.
+6. Kill the root `dotnet test` false-green (finding 10): add a `.sln`, or
+   document the explicit test-project path in `README.md`.
+7. Optional (separate high-risk decision): local history rewrite to drop build
+   blobs (`.git` 353 MB → small). The remote needs no such rewrite.
 
 ---
 
-*End of report. All numbers above were measured during this session and
-recorded verbatim; nothing extrapolated. CI remains UNVERIFIED by definition.*
+## 11. Step 5 — Squash, Push and Real CI (COMPLETE)
+
+Performed after §1–§10 were written, under an explicit authorization
+separate from the read-only audit phase.
+
+### Why the two local commits were squashed first
+
+The unpushed range `origin..HEAD` contained `0828844` (which *added* 899
+build blobs) followed by `61f39a1` (which removed them). The net tree diff
+was only 29 files, but **both commits would have travelled to the remote**,
+taking every build blob with them into permanent history.
+
+| Measure | As-is push | After squash |
+|---------|-----------|--------------|
+| Blobs in range | 780 | 27 |
+| Uncompressed bytes | 559.5 MB | 0.18 MB |
+| Commits pushed | 2 | 1 |
+| Build blobs on remote | 899 (forever) | 0 |
+| Stray `OLLAMA` message public | yes | no |
+| Dead file `t .tests…Release` published | yes | no |
+
+Safety of the rewrite: **zero remote refs contained `0828844` or `61f39a1`**
+(`git branch -r --contains 0828844` returned 0), and `origin` was still at
+`160dac2`. The rewrite was therefore local-only, and the push was a plain
+fast-forward — **no `--force`, no history rewrite of anything published.**
+
+### What was done
+
+1. Backup: `E:\DriverMasterPro-Backups\pre-squash-20261122-003752\`
+   (217 MB bundle of both commits + index + SHAs, SHA-256 manifest).
+2. `git reset --soft 160dac2`; dropped the dead file from the index;
+   one clean commit **`9ede901`** — `feat: WMI abstraction, UI
+   cache-history tests, and audit baseline`.
+3. Local re-verify on the squashed tree: Release build 0 warnings / 0
+   errors; `45/45 passed, 0 failed, 0 skipped` (TRX counters).
+4. `git push origin feature/v0.2-foundation` → `160dac2..9ede901`.
+5. CI went green (see §6).
+
+### Post-push state
+
+```
+HEAD == origin/feature/v0.2-foundation == 9ede901
+42 files tracked · 0 build files · 0 stray files · ahead 0 / behind 0
+working tree: ?? dotnet.yml only
+```
+
+---
+
+*End of report. Every number above was measured directly (`git`, `dotnet`,
+GitHub Actions API) and recorded verbatim; nothing extrapolated. Step 3B is
+no longer unverified: it is backed by a green CI run on commit `9ede901`.*
