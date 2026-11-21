@@ -18,3 +18,5 @@ obj/
 *.key
 publish/
 artifacts/
+.recovery/**
+PowerShell Profile/

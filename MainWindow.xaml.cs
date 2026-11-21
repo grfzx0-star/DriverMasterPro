@@ -17,11 +17,18 @@ public partial class MainWindow : Window
     private readonly IDatabaseService _database;
     private readonly IDiagnosticsService _diagnostics;
     private readonly List<DeviceInfo> _allDevices = new();
+    private List<ScanSnapshot> _snapshots = new();
     private CancellationTokenSource? _scanCts;
     private int _isScanning = 0;
+    private bool _isStartupLoading = true;
     private volatile bool _isClosed = false;
+    private bool _isUpdatingHistorySelection;
     private bool _isArabic;
     private int _languageIndex = 0;
+    private long? _latestScanId;
+    private long? _freshScanId;
+    private string? _displayScanTimeUtc;
+    private InventoryDisplayState _displayState = InventoryDisplayState.Empty;
 
     public MainWindow(IDeviceScanner scanner, IDatabaseService database, IDiagnosticsService diagnostics)
     {
@@ -31,25 +38,7 @@ public partial class MainWindow : Window
 
         InitializeComponent();
 
-        Loaded += async (_, _) =>
-        {
-            try
-            {
-                await _database.InitializeAsync();
-                if (!_isClosed && IsLoaded)
-                {
-                    StatusText.Text = DatabaseReadyMessage(_database.DatabasePath);
-                }
-            }
-            catch (Exception ex)
-            {
-                Trace.TraceError($"[MainWindow] Database initialization failed: {ex}");
-                if (!_isClosed && IsLoaded)
-                {
-                    StatusText.Text = DatabaseErrorMessage(ex.Message);
-                }
-            }
-        };
+        Loaded += async (_, _) => await LoadPersistedInventoryAsync();
     }
 
     public MainWindow() : this(new DeviceScanner(), new DatabaseService(), new RuleBasedDiagnosticsService())
@@ -65,6 +54,11 @@ public partial class MainWindow : Window
 
     private async void ScanButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_isStartupLoading)
+        {
+            return;
+        }
+
         // Prevent concurrent scans
         if (Interlocked.CompareExchange(ref _isScanning, 1, 0) != 0)
         {
@@ -72,6 +66,7 @@ public partial class MainWindow : Window
         }
 
         ScanButton.IsEnabled = false;
+        SnapshotHistoryBox.IsEnabled = false;
         StatusText.Text = ScanInProgressMessage();
 
         _scanCts?.Dispose();
@@ -82,7 +77,6 @@ public partial class MainWindow : Window
         {
             List<DeviceInfo> devices = await _scanner.ScanAsync(token);
             _diagnostics.EnrichAll(devices, _isArabic);
-
             await _database.SaveScanAsync(devices, token);
 
             // Ensure background work cannot update a closed or unloaded window
@@ -91,18 +85,26 @@ public partial class MainWindow : Window
                 return;
             }
 
-            _allDevices.Clear();
-            _allDevices.AddRange(devices);
+            ScanSnapshot? latest = await _database.GetLatestScanAsync();
+            List<ScanSnapshot> history = await _database.GetScanHistoryAsync();
+            if (_isClosed || !IsLoaded)
+            {
+                return;
+            }
 
-            DeviceCount.Text = devices.Count.ToString();
-            HealthyCount.Text = devices.Count(d => d.Diagnostics?.Outcome == DiagnosticOutcome.Healthy).ToString();
-            ProblemCount.Text = devices.Count(d => d.Diagnostics?.Outcome != DiagnosticOutcome.Healthy).ToString();
-
-            ApplyFilters(false);
-            DevicesGrid.SelectedIndex = DevicesGrid.Items.Count > 0 ? 0 : -1;
-            UpdateDiagnosticDetails();
-
-            StatusText.Text = ScanCompletedMessage(devices.Count);
+            _latestScanId = latest?.ScanId ?? history.FirstOrDefault()?.ScanId;
+            _freshScanId = latest?.ScanId;
+            SetHistorySnapshots(history, latest?.ScanId);
+            if (latest is not null)
+            {
+                DisplaySnapshot(latest, InventoryDisplayState.Fresh);
+                StatusText.Text = ScanCompletedMessage(devices.Count);
+            }
+            else
+            {
+                SetDisplayedDevices(devices, InventoryDisplayState.Fresh);
+                StatusText.Text = FreshScanHistoryUnavailableMessage();
+            }
         }
         catch (OperationCanceledException)
         {
@@ -131,9 +133,207 @@ public partial class MainWindow : Window
             if (!_isClosed && IsLoaded)
             {
                 ScanButton.IsEnabled = true;
+                SnapshotHistoryBox.IsEnabled = _snapshots.Count > 0;
             }
         }
     }
+
+    private async Task LoadPersistedInventoryAsync()
+    {
+        try
+        {
+            await _database.InitializeAsync();
+            if (_isClosed || !IsLoaded)
+            {
+                return;
+            }
+
+            StatusText.Text = DatabaseReadyMessage(_database.DatabasePath);
+            ScanSnapshot? latest = await _database.GetLatestScanAsync();
+            List<ScanSnapshot> history = await _database.GetScanHistoryAsync();
+            if (_isClosed || !IsLoaded)
+            {
+                return;
+            }
+
+            _latestScanId = latest?.ScanId;
+            SetHistorySnapshots(history, latest?.ScanId);
+
+            if (latest is not null)
+            {
+                DisplaySnapshot(latest, InventoryDisplayState.Cached);
+                return;
+            }
+
+            List<DeviceInfo> legacyDevices = await _database.GetCachedDevicesAsync();
+            if (_isClosed || !IsLoaded)
+            {
+                return;
+            }
+
+            SetDisplayedDevices(
+                legacyDevices,
+                legacyDevices.Count > 0 ? InventoryDisplayState.LegacyCached : InventoryDisplayState.Empty,
+                scanTimeUtc: null);
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceError($"[MainWindow] Database initialization or cache loading failed: {ex}");
+            if (!_isClosed && IsLoaded)
+            {
+                StatusText.Text = DatabaseErrorMessage(ex.Message);
+                SetDisplayedDevices(Array.Empty<DeviceInfo>(), InventoryDisplayState.Empty);
+            }
+        }
+        finally
+        {
+            _isStartupLoading = false;
+            if (!_isClosed && IsLoaded)
+            {
+                ScanButton.IsEnabled = true;
+            }
+        }
+    }
+
+    private void SetHistorySnapshots(IEnumerable<ScanSnapshot> snapshots, long? selectedScanId)
+    {
+        _snapshots = snapshots
+            .GroupBy(snapshot => snapshot.ScanId)
+            .Select(group => group.First())
+            .OrderByDescending(snapshot => snapshot.ScanId)
+            .ToList();
+
+        _isUpdatingHistorySelection = true;
+        try
+        {
+            SnapshotHistoryBox.ItemsSource = _snapshots
+                .Select(snapshot => new HistoryEntry(snapshot, FormatSnapshotLabel(snapshot)))
+                .ToList();
+            SnapshotHistoryBox.IsEnabled = _snapshots.Count > 0;
+            SnapshotHistoryBox.SelectedValue = selectedScanId;
+        }
+        finally
+        {
+            _isUpdatingHistorySelection = false;
+        }
+    }
+
+    private void RefreshHistoryLabels()
+    {
+        long? selectedScanId = SnapshotHistoryBox.SelectedValue is long id ? id : null;
+        SetHistorySnapshots(_snapshots, selectedScanId);
+    }
+
+    private string FormatSnapshotLabel(ScanSnapshot snapshot) =>
+        string.Format(
+            Translate(
+                "{0} — {1} Geräte",
+                "{0} — {1} أجهزة",
+                "{0} — {1} devices",
+                "{0} — {1} appareils",
+                "{0} — {1} dispositivos"),
+            snapshot.ScanTimeUtc,
+            snapshot.DeviceCount);
+
+    private void SnapshotHistoryBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdatingHistorySelection || SnapshotHistoryBox.SelectedItem is not HistoryEntry entry)
+        {
+            return;
+        }
+
+        InventoryDisplayState state = entry.Snapshot.ScanId == _freshScanId
+            ? InventoryDisplayState.Fresh
+            : entry.Snapshot.ScanId == _latestScanId
+                ? InventoryDisplayState.Cached
+                : InventoryDisplayState.Historical;
+
+        DisplaySnapshot(entry.Snapshot, state);
+    }
+
+    private void DisplaySnapshot(ScanSnapshot snapshot, InventoryDisplayState state)
+    {
+        SetDisplayedDevices(snapshot.Observations, state, snapshot.ScanTimeUtc);
+    }
+
+    private void SetDisplayedDevices(IEnumerable<DeviceInfo> devices, InventoryDisplayState state, string? scanTimeUtc = null)
+    {
+        _allDevices.Clear();
+        _allDevices.AddRange(devices);
+        _diagnostics.EnrichAll(_allDevices, _isArabic);
+        _displayState = state;
+        _displayScanTimeUtc = scanTimeUtc;
+
+        DeviceCount.Text = _allDevices.Count.ToString();
+        HealthyCount.Text = _allDevices.Count(device => device.Diagnostics?.Outcome == DiagnosticOutcome.Healthy).ToString();
+        ProblemCount.Text = _allDevices.Count(device => device.Diagnostics?.Outcome != DiagnosticOutcome.Healthy).ToString();
+
+        ApplyFilters(false);
+        DevicesGrid.SelectedIndex = DevicesGrid.Items.Count > 0 ? 0 : -1;
+        UpdateDiagnosticDetails();
+        UpdateInventoryStateText();
+    }
+
+    private void UpdateInventoryStateText()
+    {
+        string timestamp = _displayScanTimeUtc ?? "";
+        InventoryStateText.Text = _displayState switch
+        {
+            InventoryDisplayState.Fresh when !string.IsNullOrEmpty(timestamp) => string.Format(
+                Translate(
+                    "Frischer Scan — {0}",
+                    "فحص حديث — {0}",
+                    "Fresh scan — {0}",
+                    "Analyse récente — {0}",
+                    "Análisis reciente — {0}"),
+                timestamp),
+            InventoryDisplayState.Fresh => Translate(
+                    "Frischer Live-Scan — aktueller Snapshot nicht verfügbar.",
+                    "فحص مباشر حديث — اللقطة الحالية غير متاحة.",
+                    "Fresh live scan — latest snapshot unavailable.",
+                    "Analyse récente — instantané le plus récent indisponible.",
+                    "Análisis en vivo reciente — la instantánea más reciente no está disponible."),
+            InventoryDisplayState.Cached => string.Format(
+                Translate(
+                    "Zwischengespeicherter Bestand — veraltet; letzter Scan: {0}",
+                    "بيانات مخزنة مؤقتاً — قديمة؛ آخر فحص: {0}",
+                    "Cached inventory — stale; last scan: {0}",
+                    "Inventaire en cache — obsolète ; dernière analyse : {0}",
+                    "Inventario en caché — desactualizado; último análisis: {0}"),
+                timestamp),
+            InventoryDisplayState.Historical => string.Format(
+                Translate(
+                    "Historischer Snapshot — nicht aktuell; Scan: {0}",
+                    "لقطة تاريخية — ليست حالية؛ الفحص: {0}",
+                    "Historical snapshot — not current; scan: {0}",
+                    "Instantané historique — non actuel ; analyse : {0}",
+                    "Instantánea histórica — no actual; análisis: {0}"),
+                timestamp),
+            InventoryDisplayState.LegacyCached => Translate(
+                "Älterer zwischengespeicherter Bestand — veraltet; Zeitstempel nicht verfügbar.",
+                "بيانات قديمة مخزنة مؤقتاً — غير محدثة؛ الطابع الزمني غير متاح.",
+                "Legacy cached inventory — stale; timestamp unavailable.",
+                "Ancien inventaire en cache — obsolète ; horodatage indisponible.",
+                "Inventario heredado en caché — desactualizado; marca de tiempo no disponible."),
+            _ => Translate(
+                "Kein gespeicherter Bestand. Bitte einen Scan starten.",
+                "لا توجد بيانات محفوظة. ابدأ الفحص.",
+                "No persisted inventory. Start a scan.",
+                "Aucun inventaire enregistré. Lancez une analyse.",
+                "No hay inventario guardado. Inicie un análisis.")
+        };
+    }
+
+    private enum InventoryDisplayState
+    {
+        Empty,
+        LegacyCached,
+        Cached,
+        Historical,
+        Fresh
+    }
+
+    private sealed record HistoryEntry(ScanSnapshot Snapshot, string Label);
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
@@ -308,6 +508,16 @@ public partial class MainWindow : Window
                 "Analyse terminée : {0} appareils. Aucun pilote n’a été modifié.",
                 "Análisis completado: {0} dispositivos. No se modificó ningún controlador."),
             count);
+    }
+
+    private string FreshScanHistoryUnavailableMessage()
+    {
+        return Translate(
+            "Scan abgeschlossen. Der aktuelle Snapshot ist nicht verfügbar; Live-Ergebnisse werden angezeigt.",
+            "اكتمل الفحص. اللقطة الحالية غير متاحة؛ يتم عرض نتائج الفحص المباشر.",
+            "Scan completed. The latest snapshot is unavailable; live results are displayed.",
+            "Analyse terminée. L’instantané le plus récent est indisponible ; les résultats en direct sont affichés.",
+            "Análisis completado. La instantánea más reciente no está disponible; se muestran resultados en vivo.");
     }
 
     private string ScanCancelledMessage()
@@ -521,6 +731,15 @@ public partial class MainWindow : Window
             "Listo."
         };
 
+        string[] historyLabels =
+        {
+            "Scan-Verlauf:",
+            "سجل الفحوصات:",
+            "Scan history:",
+            "Historique des analyses :",
+            "Historial de análisis:"
+        };
+
         PageTitle.Text = pageTitles[languageIndex];
         PageSubtitle.Text = subtitles[languageIndex];
         ScanButton.Content = scanButtons[languageIndex];
@@ -531,6 +750,7 @@ public partial class MainWindow : Window
 
         SearchLabel.Text = searchLabels[languageIndex];
         FilterLabel.Text = filterLabels[languageIndex];
+        HistoryLabel.Text = historyLabels[languageIndex];
 
         for (int i = 0; i < 3; i++)
             ((ComboBoxItem)FilterBox.Items[i]).Content = filterOptions[languageIndex][i];
@@ -543,6 +763,8 @@ public partial class MainWindow : Window
         _diagnostics.EnrichAll(_allDevices, _isArabic);
         ApplyFilters(false);
         UpdateDiagnosticDetails();
+        RefreshHistoryLabels();
+        UpdateInventoryStateText();
         EditionLabel.Text = editionLabels[languageIndex];
         DashboardButton.Content = dashboardLabels[languageIndex];
         InventoryButton.Content = inventoryLabels[languageIndex];

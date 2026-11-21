@@ -225,6 +225,7 @@
     <RowDefinition Height="Auto"/>
     <RowDefinition Height="Auto"/>
     <RowDefinition Height="Auto"/>
+    <RowDefinition Height="Auto"/>
     <RowDefinition Height="*"/>
     <RowDefinition Height="Auto"/>
     <RowDefinition Height="Auto"/>
@@ -239,11 +240,16 @@
      <TextBlock x:Name="PageSubtitle"
       Text="Lokale Geräteübersicht — keine Änderungen am System"
       Foreground="#91A3B5" Margin="0,6,0,0"/>
+     <TextBlock x:Name="InventoryStateText"
+      Text="Noch kein Scan geladen."
+      Foreground="#F2B76D" Margin="0,6,0,0"
+      TextWrapping="Wrap"/>
     </StackPanel>
 
     <Button x:Name="ScanButton"
      Content="   ⟳   Jetzt scannen"
      Click="ScanButton_Click"
+     IsEnabled="False"
      HorizontalAlignment="Right"
      VerticalAlignment="Center"
      Background="#167D83"
@@ -311,8 +317,42 @@
     </Border>
    </UniformGrid>
 
-   <!-- SEARCH AND FILTER -->
+   <!-- SCAN HISTORY -->
    <Border Grid.Row="2"
+    Background="#C5182736"
+    BorderBrush="#3036D6D0"
+    BorderThickness="1"
+    CornerRadius="12"
+    Padding="12" Margin="0,0,0,10">
+
+    <Grid>
+     <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="Auto"/>
+      <ColumnDefinition Width="*"/>
+     </Grid.ColumnDefinitions>
+
+     <TextBlock x:Name="HistoryLabel"
+      Text="Scan-Verlauf:"
+      VerticalAlignment="Center"
+      Foreground="#AABAC9" Margin="0,0,10,0"/>
+
+     <ComboBox x:Name="SnapshotHistoryBox"
+      Grid.Column="1" Height="34"
+      IsEnabled="False"
+      AutomationProperties.LabeledBy="{Binding ElementName=HistoryLabel}"
+      SelectedValuePath="Snapshot.ScanId"
+      SelectionChanged="SnapshotHistoryBox_SelectionChanged">
+      <ComboBox.ItemTemplate>
+       <DataTemplate>
+        <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
+       </DataTemplate>
+      </ComboBox.ItemTemplate>
+     </ComboBox>
+    </Grid>
+   </Border>
+
+   <!-- SEARCH AND FILTER -->
+   <Border Grid.Row="3"
     Background="#C5182736"
     BorderBrush="#3036D6D0"
     BorderThickness="1"
@@ -354,7 +394,7 @@
    </Border>
 
    <!-- DEVICE TABLE -->
-   <Border Grid.Row="3"
+   <Border Grid.Row="4"
     Background="#C5121D29"
     BorderBrush="#3536D6D0"
     BorderThickness="1"
@@ -397,7 +437,7 @@
    </Border>
 
    <Expander x:Name="DiagnosticDetailsExpander"
-    Grid.Row="4"
+    Grid.Row="5"
     Header="Ausgewählte Gerätediagnose"
     Foreground="#36D6D0"
     IsExpanded="False"
@@ -428,7 +468,7 @@
    </Expander>
 
    <!-- FOOTER -->
-   <Border Grid.Row="5"
+   <Border Grid.Row="6"
     Background="#A8172635"
     CornerRadius="8"
     Padding="10,8" Margin="0,10,0,0">

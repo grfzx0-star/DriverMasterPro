@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.IO;
 using System.Threading;
 using DriverMasterPro;
@@ -7,10 +6,13 @@ using DriverMasterPro.Services;
 using DriverMasterPro.Services.Abstractions;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using System.Windows;
+using System.Windows.Controls;
 using Xunit;
 
 namespace DriverMasterPro.Tests;
 
+[Collection("WPF UI tests")]
 public sealed class DependencyInjectionTests
 {
     [Fact]
@@ -24,9 +26,12 @@ public sealed class DependencyInjectionTests
         var secondDatabase = services.GetRequiredService<IDatabaseService>();
         var firstScanner = services.GetRequiredService<IDeviceScanner>();
         var secondScanner = services.GetRequiredService<IDeviceScanner>();
+        var firstDiagnostics = services.GetRequiredService<IDiagnosticsService>();
+        var secondDiagnostics = services.GetRequiredService<IDiagnosticsService>();
 
         Assert.Same(firstDatabase, secondDatabase);
         Assert.NotSame(firstScanner, secondScanner);
+        Assert.Same(firstDiagnostics, secondDiagnostics);
 
         await host.StopAsync();
     }
@@ -56,6 +61,91 @@ public sealed class DependencyInjectionTests
 
         await host.StopAsync();
         Assert.Null(threadException);
+    }
+}
+
+[Collection("WPF UI tests")]
+public sealed class MainWindowDiagnosticsIntegrationTests
+{
+    [Fact]
+    public void ScanButton_EnrichesAndDisplaysEvidenceFromInjectedServicesOnStaThread()
+    {
+        Exception? threadException = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var device = new DeviceInfo
+                {
+                    Name = "Test device",
+                    DeviceId = "TEST_DEVICE",
+                    Manufacturer = "Test",
+                    Status = "Error",
+                    ProblemCode = 43
+                };
+                var database = new StubDatabaseService();
+                var window = new MainWindow(
+                    new StubDeviceScanner(device),
+                    database,
+                    new RuleBasedDiagnosticsService());
+
+                window.Show();
+                var scanButton = Assert.IsType<Button>(window.FindName("ScanButton"));
+                scanButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, scanButton));
+
+                var grid = Assert.IsType<DataGrid>(window.FindName("DevicesGrid"));
+                var details = Assert.IsType<Expander>(window.FindName("DiagnosticDetailsExpander"));
+                var evidence = Assert.IsType<TextBlock>(window.FindName("DiagnosticEvidenceText"));
+
+                Assert.Single(database.SavedDevices);
+                Assert.Equal(DiagnosticOutcome.Critical, device.Diagnostics?.Outcome);
+                Assert.Single(grid.Items);
+                Assert.True(details.IsExpanded);
+                Assert.Contains("CM_PROB_DEVICE_PROBLEM", evidence.Text);
+
+                window.Close();
+            }
+            catch (Exception exception)
+            {
+                threadException = exception;
+            }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        Assert.Null(threadException);
+    }
+
+    private sealed class StubDeviceScanner(DeviceInfo device) : IDeviceScanner
+    {
+        public Task<List<DeviceInfo>> ScanAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(new List<DeviceInfo> { device });
+        }
+    }
+
+    private sealed class StubDatabaseService : IDatabaseService
+    {
+        public string DatabasePath => "test database";
+        public IReadOnlyCollection<DeviceInfo> SavedDevices { get; private set; } = Array.Empty<DeviceInfo>();
+
+        public Task InitializeAsync() => Task.CompletedTask;
+
+        public Task SaveScanAsync(IReadOnlyCollection<DeviceInfo> devices, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            SavedDevices = devices;
+            return Task.CompletedTask;
+        }
+
+        public Task<ScanSnapshot?> GetLatestScanAsync() => Task.FromResult<ScanSnapshot?>(null);
+        public Task<List<ScanSnapshot>> GetScanHistoryAsync() => Task.FromResult(new List<ScanSnapshot>());
+        public Task<List<DeviceInfo>> GetCachedDevicesAsync() => Task.FromResult(new List<DeviceInfo>());
+        public Task<List<DeviceInfo>> GetActiveDevicesAsync(string scanTimeUtc) => Task.FromResult(new List<DeviceInfo>());
+        public Task<List<DeviceInfo>> GetHistoricalDevicesAsync(string currentScanTimeUtc) => Task.FromResult(new List<DeviceInfo>());
     }
 }
 
@@ -679,6 +769,96 @@ public sealed class DatabaseServiceTests : IAsyncLifetime
         };
 }
 
+public sealed class RuleBasedDiagnosticsTests
+{
+    private readonly RuleBasedDiagnosticsService _diagnostics = new();
+
+    [Theory]
+    [InlineData(0u, DiagnosticOutcome.Healthy, ProblemSeverity.Normal)]
+    [InlineData(1u, DiagnosticOutcome.Warning, ProblemSeverity.Warning)]
+    [InlineData(14u, DiagnosticOutcome.Warning, ProblemSeverity.Notice)]
+    [InlineData(10u, DiagnosticOutcome.Critical, ProblemSeverity.Critical)]
+    [InlineData(52u, DiagnosticOutcome.Critical, ProblemSeverity.Critical)]
+    public void Resolve_ClassifiesKnownConfigurationCodes(
+        uint problemCode,
+        DiagnosticOutcome expectedOutcome,
+        ProblemSeverity expectedSeverity)
+    {
+        var report = _diagnostics.Resolve(problemCode);
+
+        Assert.Equal(expectedOutcome, report.Outcome);
+        Assert.Equal(expectedSeverity, report.Severity);
+        Assert.Contains(problemCode.ToString(), report.Evidence);
+        Assert.False(string.IsNullOrWhiteSpace(report.Summary));
+        Assert.False(string.IsNullOrWhiteSpace(report.SafeRecommendation));
+    }
+
+    [Theory]
+    [InlineData(2u)]
+    [InlineData(53u)]
+    [InlineData(uint.MaxValue)]
+    public void Resolve_LeavesUnmappedCodesUnknown(uint problemCode)
+    {
+        var report = _diagnostics.Resolve(problemCode);
+
+        Assert.Equal(DiagnosticOutcome.Unknown, report.Outcome);
+        Assert.Equal(ProblemSeverity.Unknown, report.Severity);
+        Assert.Contains("no verified diagnostic rule", report.Evidence);
+        Assert.Contains("No automatic fix is suggested", report.SafeRecommendation);
+    }
+
+    [Fact]
+    public void Resolve_LeavesMissingProblemCodeUnknownEvenWhenStatusIsOk()
+    {
+        var report = _diagnostics.Resolve(null, deviceStatus: "OK");
+
+        Assert.Equal(DiagnosticOutcome.Unknown, report.Outcome);
+        Assert.Null(report.ProblemCode);
+        Assert.Contains("No ConfigManagerErrorCode value", report.Evidence);
+    }
+
+    [Fact]
+    public void Resolve_DoesNotCallConflictingWmiStatusHealthy()
+    {
+        var report = _diagnostics.Resolve(0u, deviceStatus: "Error");
+
+        Assert.Equal(DiagnosticOutcome.Unknown, report.Outcome);
+        Assert.Contains("WMI Status: Error", report.Evidence);
+    }
+
+    [Fact]
+    public void Resolve_KeepsCode43EvidenceWithoutClaimingHardwareRootCause()
+    {
+        var report = _diagnostics.Resolve(43u);
+
+        Assert.Equal(DiagnosticOutcome.Critical, report.Outcome);
+        Assert.Contains("CM_PROB_DEVICE_PROBLEM", report.Evidence);
+        Assert.Contains("does not identify the underlying cause", report.SafeRecommendation);
+    }
+
+    [Fact]
+    public void EnrichAll_UpdatesDeviceReportsAndPreservesUnknownState()
+    {
+        var devices = new[]
+        {
+            new DeviceInfo { Name = "Reported healthy", ProblemCode = 0, Status = "OK" },
+            new DeviceInfo { Name = "Missing code", ProblemCode = null, Status = "OK" }
+        };
+
+        _diagnostics.EnrichAll(devices);
+
+        Assert.Equal(DiagnosticOutcome.Healthy, devices[0].Diagnostics?.Outcome);
+        Assert.Equal(DiagnosticOutcome.Unknown, devices[1].Diagnostics?.Outcome);
+        Assert.Equal("Unknown", devices[1].Health);
+    }
+
+    [Fact]
+    public void EnrichAll_RejectsNullInput()
+    {
+        Assert.Throws<ArgumentNullException>(() => _diagnostics.EnrichAll(null!));
+    }
+}
+
 public sealed class DeviceScannerTests
 {
     [Fact]
@@ -747,18 +927,16 @@ public sealed class DeviceScannerTests
     }
 
     [Fact]
-    [Trait("Category", "WmiIntegration")]
-    [Trait("Requires", "Windows WMI service and permission to query Win32_PnPEntity; hardware inventory may be empty.")]
-    public async Task ScanAsync_QueriesLiveWmiInventory()
+    public async Task ScanAsync_PropagatesCancellationRequestedByInventoryProvider()
     {
-        var scanner = new DeviceScanner();
+        var cancellation = new OperationCanceledException("Inventory provider cancelled the scan.");
+        var provider = new FakeDeviceInventoryProvider(cancellation);
+        var scanner = new DeviceScanner(provider);
 
-        var devices = await scanner.ScanAsync();
+        var thrown = await Assert.ThrowsAsync<OperationCanceledException>(() => scanner.ScanAsync());
 
-        Assert.NotNull(devices);
-        Assert.Equal(
-            devices.Select(device => device.Name).OrderBy(name => name, StringComparer.OrdinalIgnoreCase),
-            devices.Select(device => device.Name));
+        Assert.Same(cancellation, thrown);
+        Assert.Equal(1, provider.CallCount);
     }
 
     private sealed class FakeDeviceInventoryProvider : IDeviceInventoryProvider

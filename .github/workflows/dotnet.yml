@@ -82,7 +82,6 @@ jobs:
 
           dotnet test .\tests\DriverMasterPro.Tests\DriverMasterPro.Tests.csproj `
             --configuration Release --no-build --no-restore `
-            --filter "Category!=WmiIntegration" `
             --results-directory $resultsDirectory `
             --logger "console;verbosity=normal" `
             --logger "trx;LogFileName=automated-tests.trx"
@@ -106,6 +105,6 @@ jobs:
           $failed = [int]$counters.GetAttribute('failed')
           $notExecuted = [int]$counters.GetAttribute('notExecuted')
           Write-Host "CI test results: total=$total passed=$passed failed=$failed skipped=$notExecuted"
-          if ($total -le 0 -or $passed -ne $total -or $failed -ne 0) {
+          if ($total -le 0 -or $passed -ne $total -or $failed -ne 0 -or $notExecuted -ne 0) {
             throw "Test result gate failed: require at least one test, all tests passed, and no failures or skips."
           }
