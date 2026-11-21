@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/v0.2-foundation
+      - main
   pull_request:
     branches:
       - main
@@ -31,7 +32,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -58,12 +59,20 @@ jobs:
           git --no-pager log -1 --format="Commit: %H%nAuthor: %an%nDate:   %ci%nSubject: %s"
 
       - name: Setup .NET 10
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
 
       - name: .NET info
         run: dotnet --info
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
 
       - name: Restore application and tests
         run: dotnet restore .\tests\DriverMasterPro.Tests\DriverMasterPro.Tests.csproj
@@ -79,6 +88,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $resultsDirectory = Join-Path $env:RUNNER_TEMP ("DriverMasterPro-TestResults-" + [guid]::NewGuid().ToString('N'))
           New-Item -ItemType Directory -Path $resultsDirectory -Force | Out-Null
+          "TRX_DIR=$resultsDirectory" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
           dotnet test .\tests\DriverMasterPro.Tests\DriverMasterPro.Tests.csproj `
             --configuration Release --no-build --no-restore `
@@ -108,3 +118,12 @@ jobs:
           if ($total -le 0 -or $passed -ne $total -or $failed -ne 0 -or $notExecuted -ne 0) {
             throw "Test result gate failed: require at least one test, all tests passed, and no failures or skips."
           }
+
+      - name: Upload test results (TRX)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ github.run_number }}
+          path: ${{ env.TRX_DIR }}/**/*.trx
+          if-no-files-found: warn
+          retention-days: 14
