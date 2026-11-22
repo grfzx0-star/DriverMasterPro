@@ -50,10 +50,13 @@ public sealed class WmiDeviceInventoryProvider : IDeviceInventoryProvider
                 row.TryGetValue("ConfigManagerErrorCode", out object? rawProblemCode);
 
                 string pnpId = Convert.ToString(rawPnpId)?.Trim() ?? "";
+                string name = Convert.ToString(rawName)?.Trim() ?? "";
 
                 devices.Add(new DeviceInfo
                 {
-                    Name = Convert.ToString(rawName)?.Trim() ?? "Unknown device",
+                    // A whitespace-only WMI Name must fall back too: `?? "Unknown device"`
+                    // only catches null, so an empty string would stay blank.
+                    Name = string.IsNullOrWhiteSpace(name) ? "Unknown device" : name,
                     DeviceId = pnpId,
                     Manufacturer = Convert.ToString(rawManufacturer)?.Trim() ?? "",
                     Status = Convert.ToString(rawStatus)?.Trim() ?? "",
