@@ -5,9 +5,12 @@ on:
     branches:
       - feature/v0.2-foundation
       - main
+      - 'fix/**'
+
   pull_request:
     branches:
       - main
+      - feature/v0.2-foundation
 
 permissions:
   contents: read
