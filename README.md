@@ -38,7 +38,21 @@ dotnet build .\tests\DriverMasterPro.Tests\DriverMasterPro.Tests.csproj -c Relea
 dotnet test .\tests\DriverMasterPro.Tests\DriverMasterPro.Tests.csproj -c Release
 ```
 
-Scanner unit tests use a fake inventory provider and do not require hardware. The test tagged `Category=WmiIntegration` queries live WMI and requires Windows WMI service access; CI excludes only that integration test. Access-denied and other query failures fail tests. A successful empty inventory is valid.
+Scanner unit tests use a fake inventory provider and do not require hardware. Access-denied and
+other query failures fail tests, and a successful empty inventory is a valid result at the unit
+level.
+
+Live-WMI coverage lives in a separate project, `tests/DriverMasterPro.IntegrationTests`, which is
+not part of the solution and is not built or run by CI. It is not selected by a test trait; it is
+excluded because it is a different project. These tests require the Windows WMI service and expect
+a non-empty inventory, so they must be run manually on a machine with real hardware:
+
+```
+dotnet test .\tests\DriverMasterPro.IntegrationTests\DriverMasterPro.IntegrationTests.csproj -c Release
+```
+
+Note the deliberate difference in expectation: the unit tests accept an empty inventory, while the
+integration tests assert a non-empty one.
 
 ## Device diagnostics
 
