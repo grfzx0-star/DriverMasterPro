@@ -5,9 +5,12 @@ on:
     branches:
       - feature/v0.2-foundation
       - main
+      - 'fix/**'
+
   pull_request:
     branches:
       - main
+      - feature/v0.2-foundation
 
 permissions:
   contents: read
@@ -125,5 +128,89 @@ jobs:
         with:
           name: test-results-${{ github.run_number }}
           path: ${{ env.TRX_DIR }}/**/*.trx
+          if-no-files-found: warn
+          retention-days: 14
+
+  wmi-integration:
+    name: Live WMI integration (Windows / .NET 10 / Release)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    needs: build-and-test
+
+    defaults:
+      run:
+        shell: pwsh
+
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-livewmi-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore integration tests
+        run: dotnet restore .\tests\DriverMasterPro.IntegrationTests\DriverMasterPro.IntegrationTests.csproj
+
+      - name: Build integration test project (Release)
+        run: dotnet build .\tests\DriverMasterPro.IntegrationTests\DriverMasterPro.IntegrationTests.csproj --configuration Release --no-restore
+
+      - name: Execute live WMI tests (Release)
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $resultsDirectory = Join-Path $env:RUNNER_TEMP ("DriverMasterPro-WmiResults-" + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $resultsDirectory -Force | Out-Null
+          "WMI_TRX_DIR=$resultsDirectory" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          dotnet test .\tests\DriverMasterPro.IntegrationTests\DriverMasterPro.IntegrationTests.csproj `
+            --configuration Release --no-build --no-restore `
+            --results-directory $resultsDirectory `
+            --logger "console;verbosity=normal" `
+            --logger "trx;LogFileName=live-wmi-tests.trx"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Live WMI test run failed with exit code $LASTEXITCODE."
+          }
+
+          $trxPath = Join-Path $resultsDirectory 'live-wmi-tests.trx'
+          if (-not (Test-Path $trxPath)) {
+            throw "Test result file was not produced: $trxPath"
+          }
+
+          [xml]$trx = Get-Content -LiteralPath $trxPath -Raw
+          $counters = $trx.TestRun.ResultSummary.Counters
+          if ($null -eq $counters) {
+            throw "Test result file has no execution counters."
+          }
+
+          $total = [int]$counters.GetAttribute('total')
+          $passed = [int]$counters.GetAttribute('passed')
+          $failed = [int]$counters.GetAttribute('failed')
+          $notExecuted = [int]$counters.GetAttribute('notExecuted')
+          Write-Host "Live WMI results: total=$total passed=$passed failed=$failed skipped=$notExecuted"
+          if ($total -le 0 -or $passed -ne $total -or $failed -ne 0 -or $notExecuted -ne 0) {
+            throw "Test result gate failed: require at least one test, all tests passed, and no failures or skips."
+          }
+
+      - name: Upload live WMI test results (TRX)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: live-wmi-test-results-${{ github.run_number }}
+          path: ${{ env.WMI_TRX_DIR }}/**/*.trx
           if-no-files-found: warn
           retention-days: 14
