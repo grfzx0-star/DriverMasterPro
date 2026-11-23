@@ -325,6 +325,11 @@ MVVM extraction of `MainWindow` is deferred to v0.3. Code-behind is the source o
 truth through v0.2, and `ViewModels/ViewModelBase.cs` is a parked start of that
 migration, not an active layer.
 
+Collection loops in this method are bounded by `Math.Min(UI count, translation
+count)` (commit `8a0216c`), so adding a filter or a grid column extends the loop
+instead of throwing `IndexOutOfRangeException` or leaving a control in the
+previous language.
+
 ### 12.2 Startup-vs-scan error handling asymmetry is deliberate
 
 - `LoadPersistedInventoryAsync` (startup / cache load): `Trace.TraceError` plus
