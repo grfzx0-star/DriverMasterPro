@@ -1,0 +1,32 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+
+    <!--
+        Phase 1 (theming only): ONLY the WPF-UI theme dictionary is merged here.
+        Loaded from App.xaml (runtime) and by WpfUiThemeResourceTests
+        (STA harness, no Application instance).
+
+        Measured with the app window captured at a fixed rectangle:
+          - this scope: 0 px vertical shift in all 4 measured bands;
+          - adding `ui:ControlsDictionary` instead shifted the mid-page bands
+            by +6..+8 px and changed ~21% of window pixels, concentrated in the
+            DataGrid rows. Which exact control style causes that is NOT proven
+            (hypothesis: DataGrid/DataGridRow/ScrollBar, which MainWindow.xaml
+            does not style locally), therefore it stays out until Phase 2.
+
+        NOTE: the sidebar area is not pixel-identical across separate app
+        launches (mean RGB moves by up to ~10/255 with no layout shift), so
+        whole-image pixel deltas are only comparable within one capture session.
+    -->
+    <ResourceDictionary.MergedDictionaries>
+        <ui:ThemesDictionary Theme="Dark" />
+    </ResourceDictionary.MergedDictionaries>
+
+    <!-- Application-owned tokens kept stable for Phase 1 (same values as before). -->
+    <SolidColorBrush x:Key="AccentBrush" Color="#25A56A" />
+    <SolidColorBrush x:Key="Accent" Color="#36D6D0" />
+    <SolidColorBrush x:Key="Muted" Color="#91A3B5" />
+    <SolidColorBrush x:Key="Glass" Color="#B3172432" />
+</ResourceDictionary>
