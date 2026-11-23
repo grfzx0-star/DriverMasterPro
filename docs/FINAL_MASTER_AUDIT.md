@@ -312,7 +312,7 @@ Recorded before promotion so these decisions live in the tree, not in a chat log
 
 ### 12.1 `MainWindow.LanguageBox_SelectionChanged` is the v0.3 entry point
 
-`MainWindow.xaml.cs` lines 564–776 — 213 lines, ~27% of the file. It re-translates
+`MainWindow.xaml.cs` lines 564–780 — 217 lines, ~28% of the file. It re-translates
 every named control inline and therefore owns the entire localization matrix.
 
 Maintenance consequence: any new UI control that is not wired into this method
