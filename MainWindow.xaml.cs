@@ -752,12 +752,16 @@ public partial class MainWindow : Window
         FilterLabel.Text = filterLabels[languageIndex];
         HistoryLabel.Text = historyLabels[languageIndex];
 
-        for (int i = 0; i < 3; i++)
+        // Math.Min: UI count vs translation count - prefer visible stale over crash
+        int filterCount = Math.Min(FilterBox.Items.Count, filterOptions[languageIndex].Length);
+        for (int i = 0; i < filterCount; i++)
             ((ComboBoxItem)FilterBox.Items[i]).Content = filterOptions[languageIndex][i];
 
         SearchBox.ToolTip = searchTooltips[languageIndex];
 
-        for (int i = 0; i < 7; i++)
+        // Math.Min: UI count vs translation count - prefer visible stale over crash
+        int columnCount = Math.Min(DevicesGrid.Columns.Count, columnHeaders[languageIndex].Length);
+        for (int i = 0; i < columnCount; i++)
             DevicesGrid.Columns[i].Header = columnHeaders[languageIndex][i];
 
         _diagnostics.EnrichAll(_allDevices, _isArabic);
