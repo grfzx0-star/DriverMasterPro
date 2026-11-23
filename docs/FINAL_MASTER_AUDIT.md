@@ -306,6 +306,64 @@ working tree: ?? dotnet.yml only
 
 ---
 
+## 12. Deferred Work and Standing Decisions (v0.2 promotion)
+
+Recorded before promotion so these decisions live in the tree, not in a chat log.
+
+### 12.1 `MainWindow.LanguageBox_SelectionChanged` is the v0.3 entry point
+
+`MainWindow.xaml.cs` lines 564–776 — 213 lines, ~27% of the file. It re-translates
+every named control inline and therefore owns the entire localization matrix.
+
+Maintenance consequence: any new UI control that is not wired into this method
+silently renders in the wrong language after a language switch.
+
+Standing checklist item: **new UI control → add its localized assignment to
+`LanguageBox_SelectionChanged`.**
+
+MVVM extraction of `MainWindow` is deferred to v0.3. Code-behind is the source of
+truth through v0.2, and `ViewModels/ViewModelBase.cs` is a parked start of that
+migration, not an active layer.
+
+### 12.2 Startup-vs-scan error handling asymmetry is deliberate
+
+- `LoadPersistedInventoryAsync` (startup / cache load): `Trace.TraceError` plus
+  status text only. No dialog.
+- `ScanButton_Click` (user-initiated scan): trace, status text, and a `MessageBox`.
+
+Rationale: startup must not modal-block before the window is usable; a scan is an
+explicit user action and deserves an explicit failure surface. This is intended
+behaviour, not an oversight — do not "fix" the asymmetry without revisiting this
+rationale first.
+
+### 12.3 `.recovery/v0.1-baseline/` removed; archive of record is tag `v0.1.0`
+
+The in-tree v0.1 baseline copy was removed in commit `10bc8cc`
+(`10 files changed, 378 deletions(-)`) because it was byte-identical to the tree
+of tag `v0.1.0` → commit `288e300` ("Initial commit: Driver Master Pro read-only
+MVP"). Verified file by file: 9 of 10 identical modulo CRLF, and
+`Services/DatabaseService.cs` differing only by a 3-byte UTF-8 BOM.
+
+`v0.1.0` exists locally and on `origin`, so a fresh clone can always recover the
+baseline. Do not re-add a copy to the working tree.
+
+### 12.4 Diagnostics enrichment at display time is load-bearing
+
+Not a deferred item but a standing invariant, recorded because a review nearly
+optimized it away. `IDiagnosticsService.EnrichAll` runs at scan time
+(`ScanButton_Click`) and again every time inventory is displayed
+(`SetDisplayedDevices`, and once more on language change).
+
+This is required, not redundant: `DiagnosticReport` is never persisted. The
+`Devices` table stores only `Name`, `DeviceId`, `Manufacturer`, `Status`,
+`ProblemCode`, `ProblemCodeEvidenceAvailable`. Devices loaded from SQLite always
+arrive with `Diagnostics == null`, so display-time enrichment is the only
+enrichment they ever receive. Skipping it for "already-enriched" snapshots would
+render every cached and historical device as "Unknown", and would also break
+language switching, which relies on re-enrichment with the new language flag.
+
+---
+
 *End of report. Every number above was measured directly (`git`, `dotnet`,
 GitHub Actions API) and recorded verbatim; nothing extrapolated. Step 3B is
 no longer unverified: it is backed by a green CI run on commit `9ede901`.*
