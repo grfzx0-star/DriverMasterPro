@@ -9,6 +9,7 @@ using DriverMasterPro.Models;
 using DriverMasterPro.Services;
 using DriverMasterPro.Services.Abstractions;
 using DriverMasterPro.Services.Localization;
+using DriverMasterPro.ViewModels;
 
 namespace DriverMasterPro;
 
@@ -19,7 +20,7 @@ public partial class MainWindow : Window
     private readonly IDiagnosticsService _diagnostics;
     private readonly ISettingsService _settings;
     private readonly ILocalizationService _localization;
-    private readonly List<DeviceInfo> _allDevices = new();
+    private readonly InventoryViewModel _inventoryVm;
     private List<ScanSnapshot> _snapshots = new();
     private CancellationTokenSource? _scanCts;
     private int _isScanning = 0;
@@ -49,15 +50,17 @@ public partial class MainWindow : Window
         "Versión {version} — Solo lectura"
     };
 
-    public MainWindow(IDeviceScanner scanner, IDatabaseService database, IDiagnosticsService diagnostics, ISettingsService? settings = null, ILocalizationService? localization = null)
+    public MainWindow(IDeviceScanner scanner, IDatabaseService database, IDiagnosticsService diagnostics, ISettingsService? settings = null, ILocalizationService? localization = null, InventoryViewModel? inventoryViewModel = null)
     {
         _scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
         _database = database ?? throw new ArgumentNullException(nameof(database));
         _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
         _settings = settings ?? new JsonSettingsService();
         _localization = localization ?? new LocalizationService();
+        _inventoryVm = inventoryViewModel ?? new InventoryViewModel(_diagnostics);
 
         InitializeComponent();
+        DataContext = _inventoryVm;
 
         // Apply the persisted language before the first frame, so an Arabic preference
         // renders right-to-left immediately instead of flipping after the user interacts.
@@ -285,15 +288,9 @@ public partial class MainWindow : Window
 
     private void SetDisplayedDevices(IEnumerable<DeviceInfo> devices, InventoryDisplayState state, string? scanTimeUtc = null)
     {
-        _allDevices.Clear();
-        _allDevices.AddRange(devices);
-        _diagnostics.EnrichAll(_allDevices, _isArabic);
+        _inventoryVm.SetDevices(devices, _isArabic);
         _displayState = state;
         _displayScanTimeUtc = scanTimeUtc;
-
-        DeviceCount.Text = _allDevices.Count.ToString();
-        HealthyCount.Text = _allDevices.Count(device => device.Diagnostics?.Outcome == DiagnosticOutcome.Healthy).ToString();
-        ProblemCount.Text = _allDevices.Count(device => device.Diagnostics?.Outcome != DiagnosticOutcome.Healthy).ToString();
 
         ApplyFilters(false);
         DevicesGrid.SelectedIndex = DevicesGrid.Items.Count > 0 ? 0 : -1;
@@ -377,7 +374,7 @@ public partial class MainWindow : Window
         if (!IsLoaded || DevicesGrid == null)
             return;
 
-        IEnumerable<DeviceInfo> filtered = _allDevices;
+        IEnumerable<DeviceInfo> filtered = _inventoryVm.Devices;
 
         if (FilterBox.SelectedIndex == 1)
             filtered = filtered.Where(d => d.Diagnostics?.Outcome != DiagnosticOutcome.Healthy);
@@ -398,12 +395,12 @@ public partial class MainWindow : Window
         }
 
         List<DeviceInfo> results = filtered.ToList();
-        DevicesGrid.ItemsSource = results;
+        _inventoryVm.ReplaceFilteredDevices(results);
         UpdateDiagnosticDetails();
 
         if (updateStatus)
         {
-            StatusText.Text = FilterResultsMessage(results.Count, _allDevices.Count);
+            StatusText.Text = FilterResultsMessage(results.Count, _inventoryVm.Devices.Count);
         }
     }
 
@@ -659,7 +656,7 @@ public partial class MainWindow : Window
         for (int i = 0; i < columnCount; i++)
             DevicesGrid.Columns[i].Header = strings.ColumnHeaders[i];
 
-        _diagnostics.EnrichAll(_allDevices, _isArabic);
+        _diagnostics.EnrichAll(_inventoryVm.Devices, _isArabic);
         ApplyFilters(false);
         UpdateDiagnosticDetails();
         RefreshHistoryLabels();

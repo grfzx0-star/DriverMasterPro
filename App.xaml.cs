@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using DriverMasterPro.Services;
 using DriverMasterPro.Services.Abstractions;
 using DriverMasterPro.Services.Localization;
+using DriverMasterPro.ViewModels;
 
 namespace DriverMasterPro;
 
@@ -25,6 +26,7 @@ public partial class App : Application
                 services.AddSingleton<IDiagnosticsService, RuleBasedDiagnosticsService>();
                 services.AddSingleton<ISettingsService, JsonSettingsService>();
                 services.AddSingleton<ILocalizationService, LocalizationService>();
+                services.AddTransient<InventoryViewModel>();
 
                 // Register Views
                 services.AddSingleton<MainWindow>();

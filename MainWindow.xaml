@@ -276,7 +276,7 @@
        Text="Erkannte Geräte"
        Foreground="#AABAC9" Margin="0,10,0,0"/>
       <TextBlock x:Name="DeviceCount"
-       Text="0" FontSize="32"
+       Text="{Binding DeviceCount}" FontSize="32"
        FontWeight="Bold" Margin="0,3,0,0"/>
      </StackPanel>
     </Border>
@@ -294,7 +294,7 @@
        Text="Ohne gemeldeten Fehler"
        Foreground="#AABAC9" Margin="0,10,0,0"/>
       <TextBlock x:Name="HealthyCount"
-       Text="0" FontSize="32"
+       Text="{Binding HealthyCount}" FontSize="32"
        FontWeight="Bold" Margin="0,3,0,0"/>
      </StackPanel>
     </Border>
@@ -312,7 +312,7 @@
        Text="Probleme / unbekannt"
        Foreground="#AABAC9" Margin="0,10,0,0"/>
       <TextBlock x:Name="ProblemCount"
-       Text="0" FontSize="32"
+       Text="{Binding ProblemCount}" FontSize="32"
        FontWeight="Bold" Margin="0,3,0,0"/>
      </StackPanel>
     </Border>
@@ -402,6 +402,7 @@
     CornerRadius="13" Padding="10">
 
     <DataGrid x:Name="DevicesGrid"
+     ItemsSource="{Binding FilteredDevices}"
      AutoGenerateColumns="False"
      IsReadOnly="True"
      CanUserAddRows="False"
