@@ -30,6 +30,11 @@ public partial class MainWindow : Window
     private string? _displayScanTimeUtc;
     private InventoryDisplayState _displayState = InventoryDisplayState.Empty;
 
+    // Language indices match LanguageBox item order in MainWindow.xaml:
+    // 0 Deutsch, 1 العربية, 2 English, 3 Français, 4 Español.
+    private const int ArabicLanguageIndex = 1;
+    private const int MaxLanguageIndex = 4;
+
     // "{version}" is replaced by Services.AppInfo; no version digit is written here.
     private static readonly string[] VersionLabelTemplates =
     {
@@ -576,15 +581,22 @@ public partial class MainWindow : Window
     }
     private void LanguageBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        // Startup language is applied outside this handler — see the constructor.
+        // This guard must stay: the language pass re-enters this handler if it ever
+        // sets LanguageBox.SelectedIndex, which re-raises SelectionChanged synchronously.
         if (!IsLoaded)
             return;
 
-        int languageIndex = LanguageBox.SelectedIndex;
-        if (languageIndex < 0 || languageIndex > 4)
+        ApplyLanguage(LanguageBox.SelectedIndex);
+    }
+
+    private void ApplyLanguage(int languageIndex)
+    {
+        if (languageIndex < 0 || languageIndex > MaxLanguageIndex)
             languageIndex = 0;
 
         _languageIndex = languageIndex;
-        _isArabic = languageIndex == 1;
+        _isArabic = languageIndex == ArabicLanguageIndex;
 
         FlowDirection = _isArabic
             ? FlowDirection.RightToLeft
