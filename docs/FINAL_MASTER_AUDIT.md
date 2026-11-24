@@ -319,9 +319,13 @@ first frame, from the constructor.
 Maintenance consequence: any new UI control that is not wired into this method
 silently renders in the wrong language after a language switch.
 
-Standing checklist item: **new UI control → resolve its text via
-`ILocalizationService.GetStrings(index)`.** Inline `Translate(...)` literals are not yet
-in the catalog (17 tables plus a golden fixture); migrating them is a separate step.
+Standing checklist item for a new UI control: (1) add the string to
+`LocalizationStrings` and the matching entry in `LocalizationCatalog.Languages[0..4]`;
+(2) update `tests/DriverMasterPro.Tests/Fixtures/localization-catalog.golden.json`;
+(3) resolve the text via `ILocalizationService.GetStrings(index)`. Skipping step 1 or 2
+leaves the control untranslated; the golden fixture is the only mechanism that catches a
+missing or transposed entry. Inline `Translate(...)` literals are not yet in the catalog
+(17 tables plus a golden fixture); migrating them is a separate step.
 
 MVVM extraction is underway. Committed: `LocalizationCatalog` (`ddc2fa2`), five
 `LocalizationStrings` records plus the golden fixture (`4debeec`, `6b3befb`), and the
@@ -330,9 +334,9 @@ section is superseded by those commits and should be re-read against `git log` b
 citing it.
 
 Collection loops in this method are bounded by `Math.Min(UI count, translation
-count)` (commit `8a0216c`), so adding a filter or a grid column extends the loop
-instead of throwing `IndexOutOfRangeException` or leaving a control in the
-previous language.
+count)` (commit `8a0216c`) to prevent out-of-range access when the counts differ. Every
+new filter or grid column still requires a corresponding translation entry in all five
+languages; without it, the control silently keeps the previous language after a switch.
 
 Earlier revisions cited "lines 564–780 — 217 lines, ~28% of the file". Those numbers
 were wrong when written and wrong again when "corrected" in `080c741`: the file never
