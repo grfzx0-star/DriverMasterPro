@@ -11,6 +11,11 @@
     <ProjectReference Include="..\..\DriverMasterPro.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <None Update="Fixtures\localization-catalog.golden.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
