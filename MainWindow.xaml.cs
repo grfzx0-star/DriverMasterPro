@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using DriverMasterPro.Models;
 using DriverMasterPro.Services;
 using DriverMasterPro.Services.Abstractions;
+using DriverMasterPro.Services.Localization;
 
 namespace DriverMasterPro;
 
@@ -621,142 +622,6 @@ public partial class MainWindow : Window
             _settings.Save(new AppSettings { LanguageIndex = languageIndex });
         }
 
-        string[] pageTitles =
-        {
-            "System Dashboard",
-            "لوحة معلومات النظام",
-            "System Dashboard",
-            "Tableau de bord",
-            "Panel del sistema"
-        };
-
-        string[] subtitles =
-        {
-            "Lokale Geräteübersicht — keine Änderungen am System",
-            "قائمة محلية للأجهزة — دون تغيير النظام",
-            "Local device overview — no system changes",
-            "Vue locale des appareils — aucune modification du système",
-            "Resumen local de dispositivos — sin cambios en el sistema"
-        };
-
-        string[] scanButtons =
-        {
-            "Jetzt scannen",
-            "ابدأ الفحص",
-            "Scan now",
-            "Analyser maintenant",
-            "Analizar ahora"
-        };
-
-        string[] devicesLabels =
-        {
-            "Erkannte Geräte",
-            "الأجهزة المكتشفة",
-            "Detected devices",
-            "Appareils détectés",
-            "Dispositivos detectados"
-        };
-
-        string[] healthyLabels =
-        {
-            "Ohne gemeldeten Fehler",
-            "بدون أخطاء مسجلة",
-            "No reported errors",
-            "Sans erreur signalée",
-            "Sin errores registrados"
-        };
-
-        string[] problemLabels =
-        {
-            "Probleme / unbekannt",
-            "مشاكل / غير معروف",
-            "Issues / unknown",
-            "Problèmes / inconnus",
-            "Problemas / desconocido"
-        };
-
-        string[] searchLabels =
-        {
-            "Suche:",
-            "بحث:",
-            "Search:",
-            "Recherche :",
-            "Buscar:"
-        };
-
-        string[] filterLabels =
-        {
-            "Filter:",
-            "تصفية:",
-            "Filter:",
-            "Filtre :",
-            "Filtro:"
-        };
-
-        string[][] filterOptions =
-        {
-            new[] { "Alle Geräte", "Probleme oder unbekannt", "Ohne gemeldete Probleme" },
-            new[] { "كل الأجهزة", "مشاكل أو حالة غير معروفة", "دون مشاكل مُبلّغ عنها" },
-            new[] { "All devices", "Issues or unknown", "No reported issues" },
-            new[] { "Tous les appareils", "Problèmes ou inconnus", "Aucun problème signalé" },
-            new[] { "Todos los dispositivos", "Problemas o desconocidos", "Sin problemas reportados" }
-        };
-
-        string[] searchTooltips =
-        {
-            "Suche nach Name, Hersteller oder Diagnose",
-            "ابحث بالاسم أو الشركة المصنعة أو التشخيص",
-            "Search by name, manufacturer, or diagnostic finding",
-            "Rechercher par nom, fabricant ou constat",
-            "Buscar por nombre, fabricante o diagnóstico"
-        };
-
-        string[][] columnHeaders =
-        {
-            new[] { "Gerät", "Hersteller", "WMI-Status", "Problemcode", "Bewertung", "Schweregrad", "Befund" },
-            new[] { "الجهاز", "الشركة المصنعة", "حالة WMI", "رمز المشكلة", "التقييم", "الشدة", "النتيجة" },
-            new[] { "Device", "Manufacturer", "WMI status", "Problem code", "Assessment", "Severity", "Finding" },
-            new[] { "Appareil", "Fabricant", "État WMI", "Code erreur", "Évaluation", "Gravité", "Constat" },
-            new[] { "Dispositivo", "Fabricante", "Estado WMI", "Código", "Evaluación", "Gravedad", "Hallazgo" }
-        };
-
-        // Sidebar translations
-        string[] editionLabels =
-        {
-            "Unabhängige Windows-Edition",
-            "إصدار مستقل لنظام Windows",
-            "Independent Windows Edition",
-            "Édition Windows indépendante",
-            "Edición independiente de Windows"
-        };
-
-        string[] dashboardLabels =
-        {
-            "Übersicht",
-            "لوحة المعلومات",
-            "Dashboard",
-            "Tableau de bord",
-            "Panel"
-        };
-
-        string[] inventoryLabels =
-        {
-            "Geräteübersicht",
-            "قائمة الأجهزة",
-            "Device inventory",
-            "Inventaire des appareils",
-            "Inventario de dispositivos"
-        };
-
-        string[] languageLabels =
-        {
-            "Sprache / Language",
-            "اللغة",
-            "Language",
-            "Langue",
-            "Idioma"
-        };
-
         string[] versionLabels =
         {
             AppInfo.Format(VersionLabelTemplates[0]),
@@ -766,59 +631,41 @@ public partial class MainWindow : Window
             AppInfo.Format(VersionLabelTemplates[4])
         };
 
-        string[] readyMessages =
-        {
-            "Bereit.",
-            "جاهز.",
-            "Ready.",
-            "Prêt.",
-            "Listo."
-        };
+        PageTitle.Text = LocalizationCatalog.PageTitles[languageIndex];
+        PageSubtitle.Text = LocalizationCatalog.Subtitles[languageIndex];
+        ScanButton.Content = LocalizationCatalog.ScanButtons[languageIndex];
 
-        string[] historyLabels =
-        {
-            "Scan-Verlauf:",
-            "سجل الفحوصات:",
-            "Scan history:",
-            "Historique des analyses :",
-            "Historial de análisis:"
-        };
+        DevicesLabel.Text = LocalizationCatalog.DevicesLabels[languageIndex];
+        HealthyLabel.Text = LocalizationCatalog.HealthyLabels[languageIndex];
+        ProblemLabel.Text = LocalizationCatalog.ProblemLabels[languageIndex];
 
-        PageTitle.Text = pageTitles[languageIndex];
-        PageSubtitle.Text = subtitles[languageIndex];
-        ScanButton.Content = scanButtons[languageIndex];
-
-        DevicesLabel.Text = devicesLabels[languageIndex];
-        HealthyLabel.Text = healthyLabels[languageIndex];
-        ProblemLabel.Text = problemLabels[languageIndex];
-
-        SearchLabel.Text = searchLabels[languageIndex];
-        FilterLabel.Text = filterLabels[languageIndex];
-        HistoryLabel.Text = historyLabels[languageIndex];
+        SearchLabel.Text = LocalizationCatalog.SearchLabels[languageIndex];
+        FilterLabel.Text = LocalizationCatalog.FilterLabels[languageIndex];
+        HistoryLabel.Text = LocalizationCatalog.HistoryLabels[languageIndex];
 
         // Math.Min: UI count vs translation count - prefer visible stale over crash
-        int filterCount = Math.Min(FilterBox.Items.Count, filterOptions[languageIndex].Length);
+        int filterCount = Math.Min(FilterBox.Items.Count, LocalizationCatalog.FilterOptions[languageIndex].Length);
         for (int i = 0; i < filterCount; i++)
-            ((ComboBoxItem)FilterBox.Items[i]).Content = filterOptions[languageIndex][i];
+            ((ComboBoxItem)FilterBox.Items[i]).Content = LocalizationCatalog.FilterOptions[languageIndex][i];
 
-        SearchBox.ToolTip = searchTooltips[languageIndex];
+        SearchBox.ToolTip = LocalizationCatalog.SearchTooltips[languageIndex];
 
         // Math.Min: UI count vs translation count - prefer visible stale over crash
-        int columnCount = Math.Min(DevicesGrid.Columns.Count, columnHeaders[languageIndex].Length);
+        int columnCount = Math.Min(DevicesGrid.Columns.Count, LocalizationCatalog.ColumnHeaders[languageIndex].Length);
         for (int i = 0; i < columnCount; i++)
-            DevicesGrid.Columns[i].Header = columnHeaders[languageIndex][i];
+            DevicesGrid.Columns[i].Header = LocalizationCatalog.ColumnHeaders[languageIndex][i];
 
         _diagnostics.EnrichAll(_allDevices, _isArabic);
         ApplyFilters(false);
         UpdateDiagnosticDetails();
         RefreshHistoryLabels();
         UpdateInventoryStateText();
-        EditionLabel.Text = editionLabels[languageIndex];
-        DashboardButton.Content = dashboardLabels[languageIndex];
-        InventoryButton.Content = inventoryLabels[languageIndex];
-        LanguageLabel.Text = languageLabels[languageIndex];
+        EditionLabel.Text = LocalizationCatalog.EditionLabels[languageIndex];
+        DashboardButton.Content = LocalizationCatalog.DashboardLabels[languageIndex];
+        InventoryButton.Content = LocalizationCatalog.InventoryLabels[languageIndex];
+        LanguageLabel.Text = LocalizationCatalog.LanguageLabels[languageIndex];
         VersionLabel.Text = versionLabels[languageIndex];
 
-        StatusText.Text = readyMessages[languageIndex];
+        StatusText.Text = LocalizationCatalog.ReadyMessages[languageIndex];
     }
 }
