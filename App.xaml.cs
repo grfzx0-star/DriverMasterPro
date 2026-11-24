@@ -22,6 +22,7 @@ public partial class App : Application
                 services.AddTransient<IDeviceInventoryProvider, WmiDeviceInventoryProvider>();
                 services.AddTransient<IDeviceScanner, DeviceScanner>();
                 services.AddSingleton<IDiagnosticsService, RuleBasedDiagnosticsService>();
+                services.AddSingleton<ISettingsService, JsonSettingsService>();
 
                 // Register Views
                 services.AddSingleton<MainWindow>();

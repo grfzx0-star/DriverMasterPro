@@ -87,7 +87,8 @@ public sealed class MainWindowDiagnosticsIntegrationTests
                 var window = new MainWindow(
                     new StubDeviceScanner(device),
                     database,
-                    new RuleBasedDiagnosticsService());
+                    new RuleBasedDiagnosticsService(),
+                    new InMemorySettingsService());
 
                 window.Show();
                 var scanButton = Assert.IsType<Button>(window.FindName("ScanButton"));

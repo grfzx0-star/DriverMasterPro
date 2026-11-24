@@ -95,7 +95,7 @@ public sealed class CacheHistoryUiTests
 
         await RunOnStaThreadAsync(async () =>
         {
-            var window = new MainWindow(scanner, database, new RuleBasedDiagnosticsService());
+            var window = new MainWindow(scanner, database, new RuleBasedDiagnosticsService(), new InMemorySettingsService());
             window.Show();
             await WaitForAsync(() => database.InitializeCallCount == 1);
 
@@ -266,7 +266,7 @@ public sealed class CacheHistoryUiTests
     }
 
     private static MainWindow CreateWindow(StubDatabaseService database, IEnumerable<DeviceInfo> scanDevices) =>
-        new(new StubDeviceScanner(scanDevices), database, new RuleBasedDiagnosticsService());
+        new(new StubDeviceScanner(scanDevices), database, new RuleBasedDiagnosticsService(), new InMemorySettingsService());
 
     private static ScanSnapshot CreateSnapshot(long scanId, string scanTimeUtc, params DeviceInfo[] devices) =>
         new(scanId, scanTimeUtc, devices.Length, devices);

@@ -61,7 +61,7 @@ public sealed class VersionLabelUiTests
     {
         await RunOnStaThreadAsync(() =>
         {
-            var window = new MainWindow(new EmptyDeviceScanner(), new EmptyDatabaseService(), new RuleBasedDiagnosticsService());
+            var window = new MainWindow(new EmptyDeviceScanner(), new EmptyDatabaseService(), new RuleBasedDiagnosticsService(), new InMemorySettingsService());
             var label = Assert.IsType<TextBlock>(window.FindName("VersionLabel"));
 
             Assert.Equal($"Version {AppInfo.Version} — Nur-Lese-MVP", label.Text);
@@ -75,7 +75,7 @@ public sealed class VersionLabelUiTests
     {
         await RunOnStaThreadAsync(async () =>
         {
-            var window = new MainWindow(new EmptyDeviceScanner(), new EmptyDatabaseService(), new RuleBasedDiagnosticsService());
+            var window = new MainWindow(new EmptyDeviceScanner(), new EmptyDatabaseService(), new RuleBasedDiagnosticsService(), new InMemorySettingsService());
             window.Show();
             await WaitForAsync(() => window.IsLoaded);
 

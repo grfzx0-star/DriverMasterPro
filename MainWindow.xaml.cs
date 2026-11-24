@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private readonly IDeviceScanner _scanner;
     private readonly IDatabaseService _database;
     private readonly IDiagnosticsService _diagnostics;
+    private readonly ISettingsService _settings;
     private readonly List<DeviceInfo> _allDevices = new();
     private List<ScanSnapshot> _snapshots = new();
     private CancellationTokenSource? _scanCts;
@@ -25,6 +26,7 @@ public partial class MainWindow : Window
     private bool _isUpdatingHistorySelection;
     private bool _isArabic;
     private int _languageIndex = 0;
+    private int _lastPersistedIndex = -1;
     private long? _latestScanId;
     private long? _freshScanId;
     private string? _displayScanTimeUtc;
@@ -45,16 +47,20 @@ public partial class MainWindow : Window
         "Versión {version} — Solo lectura"
     };
 
-    public MainWindow(IDeviceScanner scanner, IDatabaseService database, IDiagnosticsService diagnostics)
+    public MainWindow(IDeviceScanner scanner, IDatabaseService database, IDiagnosticsService diagnostics, ISettingsService? settings = null)
     {
         _scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
         _database = database ?? throw new ArgumentNullException(nameof(database));
         _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
+        _settings = settings ?? new JsonSettingsService();
 
         InitializeComponent();
 
-        // The language pass only runs on Loaded user changes, so seed the version label here.
-        VersionLabel.Text = AppInfo.Format(VersionLabelTemplates[0]);
+        // Apply the persisted language before the first frame, so an Arabic preference
+        // renders right-to-left immediately instead of flipping after the user interacts.
+        int savedLanguageIndex = _settings.Load().LanguageIndex;
+        ApplyLanguage(savedLanguageIndex, persist: false);
+        _lastPersistedIndex = _languageIndex;
 
         Loaded += async (_, _) => await LoadPersistedInventoryAsync();
     }
@@ -587,10 +593,10 @@ public partial class MainWindow : Window
         if (!IsLoaded)
             return;
 
-        ApplyLanguage(LanguageBox.SelectedIndex);
+        ApplyLanguage(LanguageBox.SelectedIndex, persist: true);
     }
 
-    private void ApplyLanguage(int languageIndex)
+    private void ApplyLanguage(int languageIndex, bool persist)
     {
         if (languageIndex < 0 || languageIndex > MaxLanguageIndex)
             languageIndex = 0;
@@ -601,6 +607,19 @@ public partial class MainWindow : Window
         FlowDirection = _isArabic
             ? FlowDirection.RightToLeft
             : FlowDirection.LeftToRight;
+
+        // Keeps the combo box in step with the applied language. During construction this
+        // re-raises SelectionChanged synchronously, which the !IsLoaded guard swallows.
+        if (LanguageBox.SelectedIndex != languageIndex)
+            LanguageBox.SelectedIndex = languageIndex;
+
+        // Persist only real changes; the constructor passes persist: false so restoring
+        // a saved value never rewrites the file it was just read from.
+        if (persist && languageIndex != _lastPersistedIndex)
+        {
+            _lastPersistedIndex = languageIndex;
+            _settings.Save(new AppSettings { LanguageIndex = languageIndex });
+        }
 
         string[] pageTitles =
         {
