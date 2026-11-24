@@ -196,7 +196,7 @@ public sealed class InventoryFilteringUiTests
     [Fact]
     public async Task FilteringBeforeShow_DoesNotTouchStatusText()
     {
-        await StaRunner.RunAsync(() =>
+        await StaRunner.RunAsync(async () =>
         {
             var diagnostics = new FixedDiagnosticsService();
             var viewModel = new InventoryViewModel(diagnostics);
@@ -207,8 +207,11 @@ public sealed class InventoryFilteringUiTests
             var searchBox = Assert.IsType<TextBox>(window.FindName("SearchBox"));
             var statusText = Assert.IsType<TextBlock>(window.FindName("StatusText"));
 
-            // No Show(): the guard in UpdateFilterOutput has to absorb the change.
-            searchBox.Text = "Beta";
+            // Before Show() the binding is not attached yet, so writing searchBox.Text here
+            // would be discarded when the binding pushes the source to the target. The
+            // pre-load path therefore runs through the view model, which is the owner of the
+            // state; the guard in UpdateFilterOutput has to absorb the change.
+            viewModel.SearchText = "Beta";
             string statusBeforeData = statusText.Text;
 
             viewModel.SetDevices(
@@ -220,10 +223,15 @@ public sealed class InventoryFilteringUiTests
                 InventoryDisplayState.Fresh, null, false);
 
             Assert.Equal(statusBeforeData, statusText.Text);
-            Assert.Single(viewModel.FilteredDevices);
+            var filtered = Assert.Single(viewModel.FilteredDevices);
+            Assert.Equal("Beta", filtered.Name);
+
+            // Once shown, the binding renders the state that was set before loading.
+            window.Show();
+            await StaRunner.WaitForAsync(() => window.IsLoaded);
+            Assert.Equal("Beta", searchBox.Text);
 
             window.Close();
-            return Task.CompletedTask;
         });
     }
 

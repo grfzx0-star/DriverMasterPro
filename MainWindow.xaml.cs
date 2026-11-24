@@ -346,16 +346,6 @@ public partial class MainWindow : Window
 
     private sealed record HistoryEntry(ScanSnapshot Snapshot, string Label);
 
-    private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        _inventoryVm.SearchText = SearchBox.Text;
-    }
-
-    private void FilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        _inventoryVm.FilterIndex = FilterBox.SelectedIndex;
-    }
-
     /// <summary>
     /// User-driven refresh only. Loading data and switching language stay silent so this cannot
     /// overwrite the inventory state text with the filter message.
