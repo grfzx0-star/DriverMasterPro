@@ -348,15 +348,6 @@ public partial class MainWindow : Window
         };
     }
 
-    private enum InventoryDisplayState
-    {
-        Empty,
-        LegacyCached,
-        Cached,
-        Historical,
-        Fresh
-    }
-
     private sealed record HistoryEntry(ScanSnapshot Snapshot, string Label);
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
