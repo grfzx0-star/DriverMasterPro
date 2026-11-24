@@ -32,8 +32,6 @@ public partial class MainWindow : Window
     private int _lastPersistedIndex = -1;
     private long? _latestScanId;
     private long? _freshScanId;
-    private string? _displayScanTimeUtc;
-    private InventoryDisplayState _displayState = InventoryDisplayState.Empty;
 
     // Language indices match LanguageBox item order in MainWindow.xaml:
     // 0 Deutsch, 1 العربية, 2 English, 3 Français, 4 Español.
@@ -61,6 +59,7 @@ public partial class MainWindow : Window
 
         InitializeComponent();
         DataContext = _inventoryVm;
+        _inventoryVm.FilterChanged += (_, _) => UpdateFilterOutput();
 
         // Apply the persisted language before the first frame, so an Arabic preference
         // renders right-to-left immediately instead of flipping after the user interacts.
@@ -288,11 +287,8 @@ public partial class MainWindow : Window
 
     private void SetDisplayedDevices(IEnumerable<DeviceInfo> devices, InventoryDisplayState state, string? scanTimeUtc = null)
     {
-        _inventoryVm.SetDevices(devices, _isArabic);
-        _displayState = state;
-        _displayScanTimeUtc = scanTimeUtc;
+        _inventoryVm.SetDevices(devices, state, scanTimeUtc, _isArabic);
 
-        ApplyFilters(false);
         DevicesGrid.SelectedIndex = DevicesGrid.Items.Count > 0 ? 0 : -1;
         UpdateDiagnosticDetails();
         UpdateInventoryStateText();
@@ -300,8 +296,8 @@ public partial class MainWindow : Window
 
     private void UpdateInventoryStateText()
     {
-        string timestamp = _displayScanTimeUtc ?? "";
-        InventoryStateText.Text = _displayState switch
+        string timestamp = _inventoryVm.ScanTimeUtc ?? "";
+        InventoryStateText.Text = _inventoryVm.DisplayState switch
         {
             InventoryDisplayState.Fresh when !string.IsNullOrEmpty(timestamp) => string.Format(
                 Translate(
@@ -352,47 +348,25 @@ public partial class MainWindow : Window
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        ApplyFilters();
+        _inventoryVm.SearchText = SearchBox.Text;
     }
 
     private void FilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        ApplyFilters();
+        _inventoryVm.FilterIndex = FilterBox.SelectedIndex;
     }
 
-    private void ApplyFilters(bool updateStatus = true)
+    /// <summary>
+    /// User-driven refresh only. Loading data and switching language stay silent so this cannot
+    /// overwrite the inventory state text with the filter message.
+    /// </summary>
+    private void UpdateFilterOutput()
     {
         if (!IsLoaded || DevicesGrid == null)
             return;
 
-        IEnumerable<DeviceInfo> filtered = _inventoryVm.Devices;
-
-        if (FilterBox.SelectedIndex == 1)
-            filtered = filtered.Where(d => d.Diagnostics?.Outcome != DiagnosticOutcome.Healthy);
-        else if (FilterBox.SelectedIndex == 2)
-            filtered = filtered.Where(d => d.Diagnostics?.Outcome == DiagnosticOutcome.Healthy);
-
-        string query = SearchBox.Text.Trim();
-
-        if (!string.IsNullOrWhiteSpace(query))
-        {
-            filtered = filtered.Where(d =>
-                (d.Name ?? "").Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                (d.Manufacturer ?? "").Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                (d.DeviceId ?? "").Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                (d.Status ?? "").Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                d.DiagnosticSummary.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                d.DiagnosticEvidence.Contains(query, StringComparison.OrdinalIgnoreCase));
-        }
-
-        List<DeviceInfo> results = filtered.ToList();
-        _inventoryVm.ReplaceFilteredDevices(results);
         UpdateDiagnosticDetails();
-
-        if (updateStatus)
-        {
-            StatusText.Text = FilterResultsMessage(results.Count, _inventoryVm.Devices.Count);
-        }
+        StatusText.Text = FilterResultsMessage(_inventoryVm.FilteredDevices.Count, _inventoryVm.Devices.Count);
     }
 
     private void DevicesGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -648,7 +622,7 @@ public partial class MainWindow : Window
             DevicesGrid.Columns[i].Header = strings.ColumnHeaders[i];
 
         _diagnostics.EnrichAll(_inventoryVm.Devices, _isArabic);
-        ApplyFilters(false);
+        _inventoryVm.RefreshFilteredDevices();
         UpdateDiagnosticDetails();
         RefreshHistoryLabels();
         UpdateInventoryStateText();
