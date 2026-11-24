@@ -71,13 +71,21 @@ public sealed class LocalizationCatalogGoldenTests
             + Environment.NewLine + string.Join(Environment.NewLine, problems));
     }
 
-    // 1b-ii seam: these are the only members that know the catalog is table-major today.
-    // After the reshape they read the per-language record instance instead of [index].
+    // 1b-ii seam: these are the only members that know how the catalog is stored. They
+    // project the five per-language records back into the table-major shape the fixture
+    // comparison loop below still uses, so the loop itself never changes.
     private static string[] FlatValues(string table) =>
-        (string[])Field(table).GetValue(null)!;
+        Languages().Select(language => (string)Property(table).GetValue(language)!).ToArray();
 
     private static string[][] JaggedValues(string table) =>
-        (string[][])Field(table).GetValue(null)!;
+        Languages().Select(language => (string[])Property(table).GetValue(language)!).ToArray();
+
+    private static LocalizationStrings[] Languages() =>
+        (LocalizationStrings[])Field("Languages").GetValue(null)!;
+
+    private static PropertyInfo Property(string table) =>
+        typeof(LocalizationStrings).GetProperty(table, BindingFlags.Public | BindingFlags.Instance)
+        ?? throw new InvalidOperationException($"LocalizationStrings has no public property {table}.");
 
     private static FieldInfo Field(string table) =>
         typeof(LocalizationCatalog).GetField(table, BindingFlags.Public | BindingFlags.Static)

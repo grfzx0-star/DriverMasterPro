@@ -3,123 +3,102 @@ namespace DriverMasterPro.Services.Localization;
 /// <summary>Localized UI strings, LanguageBox order: 0=de, 1=ar, 2=en, 3=fr, 4=es. Verbatim from ApplyLanguage (task 1a).</summary>
 internal static class LocalizationCatalog
 {
-    public static readonly string[] PageTitles = {
-        "System Dashboard",
-        "لوحة معلومات النظام",
-        "System Dashboard",
-        "Tableau de bord",
-        "Panel del sistema"
-    };
-    public static readonly string[] Subtitles = {
-        "Lokale Geräteübersicht — keine Änderungen am System",
-        "قائمة محلية للأجهزة — دون تغيير النظام",
-        "Local device overview — no system changes",
-        "Vue locale des appareils — aucune modification du système",
-        "Resumen local de dispositivos — sin cambios en el sistema"
-    };
-    public static readonly string[] ScanButtons = {
-        "Jetzt scannen",
-        "ابدأ الفحص",
-        "Scan now",
-        "Analyser maintenant",
-        "Analizar ahora"
-    };
-    public static readonly string[] DevicesLabels = {
-        "Erkannte Geräte",
-        "الأجهزة المكتشفة",
-        "Detected devices",
-        "Appareils détectés",
-        "Dispositivos detectados"
-    };
-    public static readonly string[] HealthyLabels = {
-        "Ohne gemeldeten Fehler",
-        "بدون أخطاء مسجلة",
-        "No reported errors",
-        "Sans erreur signalée",
-        "Sin errores registrados"
-    };
-    public static readonly string[] ProblemLabels = {
-        "Probleme / unbekannt",
-        "مشاكل / غير معروف",
-        "Issues / unknown",
-        "Problèmes / inconnus",
-        "Problemas / desconocido"
-    };
-    public static readonly string[] SearchLabels = {
-        "Suche:",
-        "بحث:",
-        "Search:",
-        "Recherche :",
-        "Buscar:"
-    };
-    public static readonly string[] FilterLabels = {
-        "Filter:",
-        "تصفية:",
-        "Filter:",
-        "Filtre :",
-        "Filtro:"
-    };
-    public static readonly string[][] FilterOptions = {
-        new[] { "Alle Geräte", "Probleme oder unbekannt", "Ohne gemeldete Probleme" },
-        new[] { "كل الأجهزة", "مشاكل أو حالة غير معروفة", "دون مشاكل مُبلّغ عنها" },
-        new[] { "All devices", "Issues or unknown", "No reported issues" },
-        new[] { "Tous les appareils", "Problèmes ou inconnus", "Aucun problème signalé" },
-        new[] { "Todos los dispositivos", "Problemas o desconocidos", "Sin problemas reportados" }
-    };
-    public static readonly string[] SearchTooltips = {
-        "Suche nach Name, Hersteller oder Diagnose",
-        "ابحث بالاسم أو الشركة المصنعة أو التشخيص",
-        "Search by name, manufacturer, or diagnostic finding",
-        "Rechercher par nom, fabricant ou constat",
-        "Buscar por nombre, fabricante o diagnóstico"
-    };
-    public static readonly string[][] ColumnHeaders = {
-        new[] { "Gerät", "Hersteller", "WMI-Status", "Problemcode", "Bewertung", "Schweregrad", "Befund" },
-        new[] { "الجهاز", "الشركة المصنعة", "حالة WMI", "رمز المشكلة", "التقييم", "الشدة", "النتيجة" },
-        new[] { "Device", "Manufacturer", "WMI status", "Problem code", "Assessment", "Severity", "Finding" },
-        new[] { "Appareil", "Fabricant", "État WMI", "Code erreur", "Évaluation", "Gravité", "Constat" },
-        new[] { "Dispositivo", "Fabricante", "Estado WMI", "Código", "Evaluación", "Gravedad", "Hallazgo" }
-    };
-    public static readonly string[] EditionLabels = {
-        "Unabhängige Windows-Edition",
-        "إصدار مستقل لنظام Windows",
-        "Independent Windows Edition",
-        "Édition Windows indépendante",
-        "Edición independiente de Windows"
-    };
-    public static readonly string[] DashboardLabels = {
-        "Übersicht",
-        "لوحة المعلومات",
-        "Dashboard",
-        "Tableau de bord",
-        "Panel"
-    };
-    public static readonly string[] InventoryLabels = {
-        "Geräteübersicht",
-        "قائمة الأجهزة",
-        "Device inventory",
-        "Inventaire des appareils",
-        "Inventario de dispositivos"
-    };
-    public static readonly string[] LanguageLabels = {
-        "Sprache / Language",
-        "اللغة",
-        "Language",
-        "Langue",
-        "Idioma"
-    };
-    public static readonly string[] ReadyMessages = {
-        "Bereit.",
-        "جاهز.",
-        "Ready.",
-        "Prêt.",
-        "Listo."
-    };
-    public static readonly string[] HistoryLabels = {
-        "Scan-Verlauf:",
-        "سجل الفحوصات:",
-        "Scan history:",
-        "Historique des analyses :",
-        "Historial de análisis:"
+    public static readonly LocalizationStrings[] Languages =
+    {
+        new(
+            PageTitles: "System Dashboard",
+            Subtitles: "Lokale Geräteübersicht — keine Änderungen am System",
+            ScanButtons: "Jetzt scannen",
+            DevicesLabels: "Erkannte Geräte",
+            HealthyLabels: "Ohne gemeldeten Fehler",
+            ProblemLabels: "Probleme / unbekannt",
+            SearchLabels: "Suche:",
+            FilterLabels: "Filter:",
+            FilterOptions: new[] { "Alle Geräte", "Probleme oder unbekannt", "Ohne gemeldete Probleme" },
+            SearchTooltips: "Suche nach Name, Hersteller oder Diagnose",
+            ColumnHeaders: new[] { "Gerät", "Hersteller", "WMI-Status", "Problemcode", "Bewertung", "Schweregrad", "Befund" },
+            EditionLabels: "Unabhängige Windows-Edition",
+            DashboardLabels: "Übersicht",
+            InventoryLabels: "Geräteübersicht",
+            LanguageLabels: "Sprache / Language",
+            ReadyMessages: "Bereit.",
+            HistoryLabels: "Scan-Verlauf:"
+        ),
+        new(
+            PageTitles: "لوحة معلومات النظام",
+            Subtitles: "قائمة محلية للأجهزة — دون تغيير النظام",
+            ScanButtons: "ابدأ الفحص",
+            DevicesLabels: "الأجهزة المكتشفة",
+            HealthyLabels: "بدون أخطاء مسجلة",
+            ProblemLabels: "مشاكل / غير معروف",
+            SearchLabels: "بحث:",
+            FilterLabels: "تصفية:",
+            FilterOptions: new[] { "كل الأجهزة", "مشاكل أو حالة غير معروفة", "دون مشاكل مُبلّغ عنها" },
+            SearchTooltips: "ابحث بالاسم أو الشركة المصنعة أو التشخيص",
+            ColumnHeaders: new[] { "الجهاز", "الشركة المصنعة", "حالة WMI", "رمز المشكلة", "التقييم", "الشدة", "النتيجة" },
+            EditionLabels: "إصدار مستقل لنظام Windows",
+            DashboardLabels: "لوحة المعلومات",
+            InventoryLabels: "قائمة الأجهزة",
+            LanguageLabels: "اللغة",
+            ReadyMessages: "جاهز.",
+            HistoryLabels: "سجل الفحوصات:"
+        ),
+        new(
+            PageTitles: "System Dashboard",
+            Subtitles: "Local device overview — no system changes",
+            ScanButtons: "Scan now",
+            DevicesLabels: "Detected devices",
+            HealthyLabels: "No reported errors",
+            ProblemLabels: "Issues / unknown",
+            SearchLabels: "Search:",
+            FilterLabels: "Filter:",
+            FilterOptions: new[] { "All devices", "Issues or unknown", "No reported issues" },
+            SearchTooltips: "Search by name, manufacturer, or diagnostic finding",
+            ColumnHeaders: new[] { "Device", "Manufacturer", "WMI status", "Problem code", "Assessment", "Severity", "Finding" },
+            EditionLabels: "Independent Windows Edition",
+            DashboardLabels: "Dashboard",
+            InventoryLabels: "Device inventory",
+            LanguageLabels: "Language",
+            ReadyMessages: "Ready.",
+            HistoryLabels: "Scan history:"
+        ),
+        new(
+            PageTitles: "Tableau de bord",
+            Subtitles: "Vue locale des appareils — aucune modification du système",
+            ScanButtons: "Analyser maintenant",
+            DevicesLabels: "Appareils détectés",
+            HealthyLabels: "Sans erreur signalée",
+            ProblemLabels: "Problèmes / inconnus",
+            SearchLabels: "Recherche :",
+            FilterLabels: "Filtre :",
+            FilterOptions: new[] { "Tous les appareils", "Problèmes ou inconnus", "Aucun problème signalé" },
+            SearchTooltips: "Rechercher par nom, fabricant ou constat",
+            ColumnHeaders: new[] { "Appareil", "Fabricant", "État WMI", "Code erreur", "Évaluation", "Gravité", "Constat" },
+            EditionLabels: "Édition Windows indépendante",
+            DashboardLabels: "Tableau de bord",
+            InventoryLabels: "Inventaire des appareils",
+            LanguageLabels: "Langue",
+            ReadyMessages: "Prêt.",
+            HistoryLabels: "Historique des analyses :"
+        ),
+        new(
+            PageTitles: "Panel del sistema",
+            Subtitles: "Resumen local de dispositivos — sin cambios en el sistema",
+            ScanButtons: "Analizar ahora",
+            DevicesLabels: "Dispositivos detectados",
+            HealthyLabels: "Sin errores registrados",
+            ProblemLabels: "Problemas / desconocido",
+            SearchLabels: "Buscar:",
+            FilterLabels: "Filtro:",
+            FilterOptions: new[] { "Todos los dispositivos", "Problemas o desconocidos", "Sin problemas reportados" },
+            SearchTooltips: "Buscar por nombre, fabricante o diagnóstico",
+            ColumnHeaders: new[] { "Dispositivo", "Fabricante", "Estado WMI", "Código", "Evaluación", "Gravedad", "Hallazgo" },
+            EditionLabels: "Edición independiente de Windows",
+            DashboardLabels: "Panel",
+            InventoryLabels: "Inventario de dispositivos",
+            LanguageLabels: "Idioma",
+            ReadyMessages: "Listo.",
+            HistoryLabels: "Historial de análisis:"
+        ),
     };
 }

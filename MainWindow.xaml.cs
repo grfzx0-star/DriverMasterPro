@@ -631,41 +631,41 @@ public partial class MainWindow : Window
             AppInfo.Format(VersionLabelTemplates[4])
         };
 
-        PageTitle.Text = LocalizationCatalog.PageTitles[languageIndex];
-        PageSubtitle.Text = LocalizationCatalog.Subtitles[languageIndex];
-        ScanButton.Content = LocalizationCatalog.ScanButtons[languageIndex];
+        PageTitle.Text = LocalizationCatalog.Languages[languageIndex].PageTitles;
+        PageSubtitle.Text = LocalizationCatalog.Languages[languageIndex].Subtitles;
+        ScanButton.Content = LocalizationCatalog.Languages[languageIndex].ScanButtons;
 
-        DevicesLabel.Text = LocalizationCatalog.DevicesLabels[languageIndex];
-        HealthyLabel.Text = LocalizationCatalog.HealthyLabels[languageIndex];
-        ProblemLabel.Text = LocalizationCatalog.ProblemLabels[languageIndex];
+        DevicesLabel.Text = LocalizationCatalog.Languages[languageIndex].DevicesLabels;
+        HealthyLabel.Text = LocalizationCatalog.Languages[languageIndex].HealthyLabels;
+        ProblemLabel.Text = LocalizationCatalog.Languages[languageIndex].ProblemLabels;
 
-        SearchLabel.Text = LocalizationCatalog.SearchLabels[languageIndex];
-        FilterLabel.Text = LocalizationCatalog.FilterLabels[languageIndex];
-        HistoryLabel.Text = LocalizationCatalog.HistoryLabels[languageIndex];
+        SearchLabel.Text = LocalizationCatalog.Languages[languageIndex].SearchLabels;
+        FilterLabel.Text = LocalizationCatalog.Languages[languageIndex].FilterLabels;
+        HistoryLabel.Text = LocalizationCatalog.Languages[languageIndex].HistoryLabels;
 
         // Math.Min: UI count vs translation count - prefer visible stale over crash
-        int filterCount = Math.Min(FilterBox.Items.Count, LocalizationCatalog.FilterOptions[languageIndex].Length);
+        int filterCount = Math.Min(FilterBox.Items.Count, LocalizationCatalog.Languages[languageIndex].FilterOptions.Length);
         for (int i = 0; i < filterCount; i++)
-            ((ComboBoxItem)FilterBox.Items[i]).Content = LocalizationCatalog.FilterOptions[languageIndex][i];
+            ((ComboBoxItem)FilterBox.Items[i]).Content = LocalizationCatalog.Languages[languageIndex].FilterOptions[i];
 
-        SearchBox.ToolTip = LocalizationCatalog.SearchTooltips[languageIndex];
+        SearchBox.ToolTip = LocalizationCatalog.Languages[languageIndex].SearchTooltips;
 
         // Math.Min: UI count vs translation count - prefer visible stale over crash
-        int columnCount = Math.Min(DevicesGrid.Columns.Count, LocalizationCatalog.ColumnHeaders[languageIndex].Length);
+        int columnCount = Math.Min(DevicesGrid.Columns.Count, LocalizationCatalog.Languages[languageIndex].ColumnHeaders.Length);
         for (int i = 0; i < columnCount; i++)
-            DevicesGrid.Columns[i].Header = LocalizationCatalog.ColumnHeaders[languageIndex][i];
+            DevicesGrid.Columns[i].Header = LocalizationCatalog.Languages[languageIndex].ColumnHeaders[i];
 
         _diagnostics.EnrichAll(_allDevices, _isArabic);
         ApplyFilters(false);
         UpdateDiagnosticDetails();
         RefreshHistoryLabels();
         UpdateInventoryStateText();
-        EditionLabel.Text = LocalizationCatalog.EditionLabels[languageIndex];
-        DashboardButton.Content = LocalizationCatalog.DashboardLabels[languageIndex];
-        InventoryButton.Content = LocalizationCatalog.InventoryLabels[languageIndex];
-        LanguageLabel.Text = LocalizationCatalog.LanguageLabels[languageIndex];
+        EditionLabel.Text = LocalizationCatalog.Languages[languageIndex].EditionLabels;
+        DashboardButton.Content = LocalizationCatalog.Languages[languageIndex].DashboardLabels;
+        InventoryButton.Content = LocalizationCatalog.Languages[languageIndex].InventoryLabels;
+        LanguageLabel.Text = LocalizationCatalog.Languages[languageIndex].LanguageLabels;
         VersionLabel.Text = versionLabels[languageIndex];
 
-        StatusText.Text = LocalizationCatalog.ReadyMessages[languageIndex];
+        StatusText.Text = LocalizationCatalog.Languages[languageIndex].ReadyMessages;
     }
 }
