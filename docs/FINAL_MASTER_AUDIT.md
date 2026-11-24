@@ -310,25 +310,34 @@ working tree: ?? dotnet.yml only
 
 Recorded before promotion so these decisions live in the tree, not in a chat log.
 
-### 12.1 `MainWindow.LanguageBox_SelectionChanged` is the v0.3 entry point
+### 12.1 `MainWindow.ApplyLanguage` owns the localization matrix (formerly: the v0.3 entry point)
 
-`MainWindow.xaml.cs` lines 564–780 — 217 lines, ~28% of the file. It re-translates
-every named control inline and therefore owns the entire localization matrix.
+`ApplyLanguage` re-translates every named control inline and therefore owns the entire
+localization matrix. It is reached from `LanguageBox_SelectionChanged` and, before the
+first frame, from the constructor.
 
 Maintenance consequence: any new UI control that is not wired into this method
 silently renders in the wrong language after a language switch.
 
-Standing checklist item: **new UI control → add its localized assignment to
-`LanguageBox_SelectionChanged`.**
+Standing checklist item: **new UI control → resolve its text via
+`ILocalizationService.GetStrings(index)`.** Inline `Translate(...)` literals are not yet
+in the catalog (17 tables plus a golden fixture); migrating them is a separate step.
 
-MVVM extraction of `MainWindow` is deferred to v0.3. Code-behind is the source of
-truth through v0.2, and `ViewModels/ViewModelBase.cs` is a parked start of that
-migration, not an active layer.
+MVVM extraction is underway. Committed: `LocalizationCatalog` (`ddc2fa2`), five
+`LocalizationStrings` records plus the golden fixture (`4debeec`, `6b3befb`), and the
+`ILocalizationService` seam (`ea48e93`). Next: the `InventoryViewModel` pilot. This
+section is superseded by those commits and should be re-read against `git log` before
+citing it.
 
 Collection loops in this method are bounded by `Math.Min(UI count, translation
 count)` (commit `8a0216c`), so adding a filter or a grid column extends the loop
 instead of throwing `IndexOutOfRangeException` or leaving a control in the
 previous language.
+
+Earlier revisions cited "lines 564–780 — 217 lines, ~28% of the file". Those numbers
+were wrong when written and wrong again when "corrected" in `080c741`: the file never
+reached line 780, and `ApplyLanguage` is a small fraction of it. The line numbers were
+removed rather than corrected a third time.
 
 ### 12.2 Startup-vs-scan error handling asymmetry is deliberate
 
