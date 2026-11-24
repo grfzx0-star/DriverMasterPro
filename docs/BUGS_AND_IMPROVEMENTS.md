@@ -34,11 +34,11 @@ The WMI provider sets an enumeration packet timeout and the UI passes a cancella
 
 ### Bug 5: Incomplete RTL Layout Mirroring — margins FIXED in `3a4a62e`, real RTL still open
 - **File Reference**: `MainWindow.xaml:335` (`HistoryLabel`), `:371` (`SearchLabel`), `:381` (`FilterLabel`). The previously cited `D:/Office/...v0.1` lines 49/55/61 are stale; the original entry also missed `FilterLabel`.
-- **Code**:
+- **Code before the fix** (the v0.1 `<Border>` snippet that used to sit here did not match this codebase and has been removed):
   ```xml
-  <Border Margin="0,0,10,0" ... />
-  <Border Margin="5,0" ... />
-  <Border Margin="10,0,0,0" ... />
+  <TextBlock x:Name="HistoryLabel" ... Margin="0,0,10,0"/>
+  <TextBlock x:Name="SearchLabel"  ... Margin="0,0,10,0"/>
+  <TextBlock x:Name="FilterLabel"  ... Margin="17,0,10,0"/>
   ```
 - **Analysis**: WPF `FlowDirection.RightToLeft` mirrors general layout, but explicit asymmetric margins (`Margin="10,0,0,0"`) do not automatically flip their left/right offsets.
 - **Impact**: In Arabic RTL mode, card spacing becomes visually asymmetrical.
@@ -63,7 +63,7 @@ The WMI provider sets an enumeration packet timeout and the UI passes a cancella
 
 ### 2.2 SQL Injection Assessment
 - **Status**: **Safe**.
-- All queries in [DatabaseService.cs](file:///D:/Office/Programs/DriverMasterPro_v0.1_Source/DriverMasterPro_v0.1/Services/DatabaseService.cs) use parameterized statements (`$id`, `$name`, etc.). No dynamic string interpolation is present in SQL statements.
+- All queries in `Services/DatabaseService.cs` use parameterized statements (`$id`, `$name`, etc.). No dynamic string interpolation is present in SQL statements. (The former `D:/Office/...v0.1` link was a local untracked path and has been removed.)
 
 ### 2.3 WMI Subsystem Impact
 - Enumerating `Win32_PnPEntity` generates brief CPU spikes in `WmiPrvSE.exe` (WMI Provider Host). This is normal behavior for full Plug-and-Play WMI queries on Windows.
@@ -96,8 +96,8 @@ graph TD
 3. **Declarative Localization**:
    - Replace procedural string rewriting with XAML `ResourceDictionary` bundles (`Strings.de.xaml`, `Strings.ar.xaml`, `Strings.en.xaml`).
    - Add **English (`en`)** as an available language.
-4. **Unit Test Suite**:
-   - Create `DriverMasterPro.Tests` project using `xUnit` and `Moq`.
+4. **Unit Test Suite — DONE**:
+   - `DriverMasterPro.Tests` exists on xUnit 2.9.3 with hand-written fakes. `Moq` was not adopted: fake services are already used throughout the suite and are cheaper than a mocking framework here. Currently 67/67 green (59 unit + 8 live-WMI).
 
 ---
 
@@ -114,8 +114,8 @@ graph TD
 ---
 
 ### Phase 3: Persistence, History & Offline Cache (Priority: Medium)
-1. **Startup Cache Loading**:
-   - Load and display the most recent scan from SQLite immediately upon application startup.
+1. **Startup Cache Loading — DONE**:
+   - The most recent scan is loaded and displayed at startup via `MainWindow.LoadPersistedInventoryAsync`; covered by `CacheHistoryUiTests` (stale/empty-history/duplicate-observation cases).
 2. **Scan History & Diff Inspection**:
    - Provide a dedicated UI page to browse past scans.
    - Highlight hardware and driver changes between scans (devices connected, disconnected, updated).
