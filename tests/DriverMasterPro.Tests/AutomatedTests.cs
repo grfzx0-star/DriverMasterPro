@@ -62,6 +62,51 @@ public sealed class DependencyInjectionTests
         await host.StopAsync();
         Assert.Null(threadException);
     }
+
+    [Fact]
+    public void SettingsService_IsRegisteredInTheApplicationHost()
+    {
+        using var host = App.CreateHostBuilder().Build();
+
+        Assert.NotNull(host.Services.GetService<ISettingsService>());
+    }
+
+    [Fact]
+    public void MainWindow_ReceivesTheRegisteredSettingsInstance()
+    {
+        // Guards the defect class we hit: resolution succeeding is not proof that the
+        // registered instance was injected instead of a fresh default one.
+        var spy = new SpySettingsService();
+        var services = new ServiceCollection();
+        services.AddSingleton<IDeviceScanner, EmptyDeviceScanner>();
+        services.AddSingleton<IDatabaseService, EmptyDatabaseService>();
+        services.AddSingleton<IDiagnosticsService, RuleBasedDiagnosticsService>();
+        services.AddSingleton<ISettingsService>(spy);
+        services.AddSingleton<MainWindow>();
+
+        using var provider = services.BuildServiceProvider();
+
+        Exception? threadException = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                Assert.NotNull(provider.GetRequiredService<MainWindow>());
+            }
+            catch (Exception exception)
+            {
+                threadException = exception;
+            }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        Assert.Null(threadException);
+        // The constructor calls Load(), so a count of 1 proves the injected instance was used.
+        Assert.Equal(1, spy.LoadCallCount);
+    }
 }
 
 [Collection("WPF UI tests")]

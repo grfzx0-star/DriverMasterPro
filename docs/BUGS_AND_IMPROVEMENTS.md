@@ -32,7 +32,7 @@ The WMI provider sets an enumeration packet timeout and the UI passes a cancella
 
 ---
 
-### Bug 5: Incomplete RTL Layout Mirroring — margins FIXED in `3a4a62e`, real RTL still open
+### Bug 5: Incomplete RTL Layout Mirroring — margins FIXED in `3a4a62e`; startup RTL closed by Bug 6
 - **File Reference**: `MainWindow.xaml:335` (`HistoryLabel`), `:371` (`SearchLabel`), `:381` (`FilterLabel`). The previously cited `D:/Office/...v0.1` lines 49/55/61 are stale; the original entry also missed `FilterLabel`.
 - **Code before the fix** (the v0.1 `<Border>` snippet that used to sit here did not match this codebase and has been removed):
   ```xml
@@ -46,11 +46,26 @@ The WMI provider sets an enumeration packet timeout and the UI passes a cancella
 
 ---
 
-### Bug 6 (open): RTL is prepared, not functional
-- **File Reference**: `MainWindow.xaml.cs:577` sets `FlowDirection` from `_isArabic`, but only inside the `IsLoaded`-gated language pass.
-- **Analysis**: Symmetric margins (Bug 5) are a prerequisite, not a solution. `FlowDirection` is wired but dead at startup: the app always renders LTR until the user manually switches language, and the choice is not persisted, so a restart returns to LTR.
-- **Remaining work**: set `FlowDirection` outside the `IsLoaded` gate (or apply it in the constructor), persist the language preference (`AppSettings` table or JSON config), and add a mirroring test (STA UI test asserting `FlowDirection.RightToLeft` plus a geometry check).
-- **Status**: Open.
+### Bug 6: RTL at startup and language persistence — FIXED in `33d42f8`
+- **File Reference**: `MainWindow.xaml.cs` (4-param ctor, `ApplyLanguage`), `Services/JsonSettingsService.cs`, `App.xaml.cs:23`.
+- **Analysis (as found)**: Symmetric margins (Bug 5) are a prerequisite, not a solution. `FlowDirection` was wired but dead at startup: the app always rendered LTR until the user manually switched language, and the choice was not persisted, so a restart returned to LTR.
+- **Fix applied**: `ISettingsService` + `AppSettings` (schema 1) + `JsonSettingsService` persist the language index to `%LOCALAPPDATA%\DriverMasterPro\settings.json` using a temp file + `File.Move`, so an interrupted write cannot silently reset the user's language. Missing, corrupt and unreadable files fall back to German. `MainWindow` applies the saved language **before the first frame**, and `ApplyLanguage` persists only real changes via `_lastPersistedIndex`. `ISettingsService` is registered in DI so `MainWindow` resolves through exactly one constructor.
+- **Coverage**: 7 tests, including `ArabicStartup_AppliesRightToLeftOnFirstFrame` (asserts `FlowDirection.RightToLeft` before `Show()` completes) and `SwitchingLanguage_PersistsSelection`.
+
+---
+
+### Bug 7 (open): settings-file pollution is closed per call-site, not by construction
+- **Analysis**: `MainWindow` now reads a settings file by default, so any test that calls `new MainWindow(scanner, database, diagnostics)` without injecting `ISettingsService` reads the developer's real `%LOCALAPPDATA%` file. This was observed: one test switching language wrote `LanguageIndex: 4`, and later German-asserting tests failed by reading Spanish.
+- **Current mitigation**: all 4 test call sites inject `InMemorySettingsService`. This is enforcement by discipline, not by the type system.
+- **Remaining work**: remove or internalise the parameterless `MainWindow()` constructor (currently kept for the WPF designer — it is the only place a window is built without injection), or fail fast in tests when a real settings path is used.
+- **Status**: Open, accepted for v0.2.
+
+---
+
+### Note: why `App.xaml.cs` registers `ISettingsService`
+`MainWindow` gained a fourth constructor dependency, and the parameterless overload still exists for the designer. Measured on this target framework with a two-constructor probe: `ServiceProvider` **applies default parameter values** when selecting a constructor, so with `ISettingsService` unregistered the 4-parameter overload is still chosen and `settings` is `null`. The registration therefore does **not** prevent a fallback to the parameterless constructor — it ensures the registered instance is injected instead of `null`. Because the constructor coalesces null (`settings ?? new JsonSettingsService()`), the failure mode without the registration is a second, container-bypassing settings instance, not an exception.
+- **Guard:** `MainWindow_ReceivesTheRegisteredSettingsInstance` registers a spy and asserts its `Load` was called, which proves injection into the consumer rather than mere singleton identity. `SettingsService_IsRegisteredInTheApplicationHost` asserts the registration exists in `App.CreateHostBuilder()`.
+- **History:** an earlier revision of this note claimed the registration prevented a silent fallback to the parameterless constructor. That was wrong and has been corrected here.
 
 ---
 

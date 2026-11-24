@@ -63,6 +63,31 @@ internal sealed class InMemorySettingsService : ISettingsService
 }
 
 /// <summary>
+/// Records calls so a test can prove the container-injected instance actually reached the
+/// consumer, which singleton identity alone cannot show.
+/// </summary>
+internal sealed class SpySettingsService : ISettingsService
+{
+    public AppSettings Current { get; private set; } = new();
+
+    public int LoadCallCount { get; private set; }
+
+    public int SaveCallCount { get; private set; }
+
+    public AppSettings Load()
+    {
+        LoadCallCount++;
+        return Current;
+    }
+
+    public void Save(AppSettings settings)
+    {
+        Current = settings;
+        SaveCallCount++;
+    }
+}
+
+/// <summary>
 /// Runs a test body on a dedicated STA thread with a live Dispatcher, which WPF windows
 /// require. The xUnit package in use has no STA attribute, so this replaces one.
 /// </summary>

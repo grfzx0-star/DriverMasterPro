@@ -1,14 +1,16 @@
 # Session Handoff — DriverMasterPro CI Investigation
 
 > **SUPERSEDED — do not follow the steps below without re-checking them.**
-> This document describes an older working tree. Current state as of HEAD `080c741`
-> ("docs: correct LanguageBox_SelectionChanged extent to 564-780"):
+> This document describes an older working tree. Current state as of HEAD `33d42f8`
+> ("feat: persist language choice and apply RTL before the first frame"):
 >
 > - Working tree is **clean**; the 5 "uncommitted" files and untracked `ViewModels/`,
 >   `docs/` files listed in section 2 are all committed.
 > - `.recovery/` **no longer exists**, and `.gitignore` now contains `.recovery/**`.
 >   The "pending approval" `.gitignore` fix in section 7 is **already applied** — do not redo it.
-> - Test count is **67/67 green** (59 unit + 8 live-WMI integration), not 45.
+> - Test count is **76/76 green** (68 unit + 8 live-WMI integration), not 45.
+> - Bug 6 (RTL startup) is **fixed** in `33d42f8`; language is persisted to
+>   `%LOCALAPPDATA%\DriverMasterPro\settings.json`.
 > - The WPF UI tests in section 6 now run green in CI on `windows-latest`; that risk is closed.
 > - The CI test-result gate is intentionally strict; do not relax `$notExecuted -ne 0`
 >   without a stated reason.
