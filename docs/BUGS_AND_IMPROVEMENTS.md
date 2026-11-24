@@ -21,19 +21,19 @@ The WMI provider sets an enumeration packet timeout and the UI passes a cancella
 
 ---
 
-### Bug 4: Version String Inconsistency
+### Bug 4: Version String Inconsistency — FIXED in `3a4a62e`
 - **References**:
   - `README.md:1`: `"DRIVER MASTER PRO — v0.2 Foundation"`
   - `artifacts/DriverMasterPro-v0.1.0-win-x64/README.txt:1`: `"DRIVER MASTER PRO v0.1.0"`
-  - [MainWindow.xaml:26](file:///D:/Office/Programs/DriverMasterPro_v0.1_Source/DriverMasterPro_v0.1/MainWindow.xaml#L26): `"Version 0.2 — Read-only MVP"`
+  - `MainWindow.xaml:214` (previously cited via a dead `D:/Office/...v0.1` path): text was `"Version 0.2 — Read-only MVP"`, now empty and filled from `Services.AppInfo`. The runtime source was `MainWindow.xaml.cs:776`, not the XAML — see the analysis below.
   - `DriverMasterPro.csproj`: Omits `<Version>` property, defaulting to `1.0.0.0`.
-- **Analysis**: Inconsistent version numbers across documentation, release packages, and user interface confuse users and release automation.
-- **Recommended Fix**: Centralize `<Version>0.1.0</Version>` in `DriverMasterPro.csproj` and bind UI labels to `Assembly.GetExecutingAssembly().GetName().Version`.
+- **Analysis (corrected during the fix)**: Inconsistent version numbers across documentation, release packages, and user interface confuse users and release automation. The XAML literal was not merely a design-time default: `LanguageBox_SelectionChanged` begins with `if (!IsLoaded) return;`, so the language pass never ran at startup and the hardcoded XAML text is what users actually saw. `artifacts/*/README.txt` still says `v0.1.0`, but `artifacts/` is gitignored and untracked, so it is local build output and never ships.
+- **Fix applied**: `<Version>0.2.0</Version>` is declared once in `DriverMasterPro.csproj`. `Services/AppInfo.cs` reads the number back from assembly metadata (`Assembly.GetName().Version`, deliberately not `InformationalVersion`, which carries a SourceLink `+sha`). The five localized labels live in one `VersionLabelTemplates` array in `MainWindow.xaml.cs` with a `{version}` placeholder; the constructor seeds the default German label from it and the language pass formats the same array. A single `VersionLabel` string cannot work, because the localized templates differ in prefix (`Versión`, `الإصدار`).
 
 ---
 
-### Bug 5: Incomplete RTL Layout Mirroring
-- **File Reference**: [MainWindow.xaml:49, 55, 61](file:///D:/Office/Programs/DriverMasterPro_v0.1_Source/DriverMasterPro_v0.1/MainWindow.xaml#L49)
+### Bug 5: Incomplete RTL Layout Mirroring — margins FIXED in `3a4a62e`, real RTL still open
+- **File Reference**: `MainWindow.xaml:335` (`HistoryLabel`), `:371` (`SearchLabel`), `:381` (`FilterLabel`). The previously cited `D:/Office/...v0.1` lines 49/55/61 are stale; the original entry also missed `FilterLabel`.
 - **Code**:
   ```xml
   <Border Margin="0,0,10,0" ... />
@@ -42,7 +42,15 @@ The WMI provider sets an enumeration packet timeout and the UI passes a cancella
   ```
 - **Analysis**: WPF `FlowDirection.RightToLeft` mirrors general layout, but explicit asymmetric margins (`Margin="10,0,0,0"`) do not automatically flip their left/right offsets.
 - **Impact**: In Arabic RTL mode, card spacing becomes visually asymmetrical.
-- **Recommended Fix**: Use uniform column spacing via `Grid` column definitions or symmetrical margins (`Margin="5,0"`).
+- **Fix applied**: `HistoryLabel` and `SearchLabel` were `Margin="0,0,10,0"` and `FilterLabel` was `Margin="17,0,10,0"`. All three are now symmetric `Margin="10,0"`, so the gap renders identically in both flow directions. Note `FilterLabel` moves 7 px left as a result — accepted, to keep one spacing token across the three labels.
+
+---
+
+### Bug 6 (open): RTL is prepared, not functional
+- **File Reference**: `MainWindow.xaml.cs:577` sets `FlowDirection` from `_isArabic`, but only inside the `IsLoaded`-gated language pass.
+- **Analysis**: Symmetric margins (Bug 5) are a prerequisite, not a solution. `FlowDirection` is wired but dead at startup: the app always renders LTR until the user manually switches language, and the choice is not persisted, so a restart returns to LTR.
+- **Remaining work**: set `FlowDirection` outside the `IsLoaded` gate (or apply it in the constructor), persist the language preference (`AppSettings` table or JSON config), and add a mirroring test (STA UI test asserting `FlowDirection.RightToLeft` plus a geometry check).
+- **Status**: Open.
 
 ---
 
