@@ -30,6 +30,16 @@ public partial class MainWindow : Window
     private string? _displayScanTimeUtc;
     private InventoryDisplayState _displayState = InventoryDisplayState.Empty;
 
+    // "{version}" is replaced by Services.AppInfo; no version digit is written here.
+    private static readonly string[] VersionLabelTemplates =
+    {
+        "Version {version} — Nur-Lese-MVP",
+        "الإصدار {version} — نسخة للقراءة فقط",
+        "Version {version} — Read-only MVP",
+        "Version {version} — Version en lecture seule",
+        "Versión {version} — Solo lectura"
+    };
+
     public MainWindow(IDeviceScanner scanner, IDatabaseService database, IDiagnosticsService diagnostics)
     {
         _scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
@@ -37,6 +47,9 @@ public partial class MainWindow : Window
         _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
 
         InitializeComponent();
+
+        // The language pass only runs on Loaded user changes, so seed the version label here.
+        VersionLabel.Text = AppInfo.Format(VersionLabelTemplates[0]);
 
         Loaded += async (_, _) => await LoadPersistedInventoryAsync();
     }
@@ -715,11 +728,11 @@ public partial class MainWindow : Window
 
         string[] versionLabels =
         {
-            "Version 0.2 — Nur-Lese-MVP",
-            "الإصدار 0.2 — نسخة للقراءة فقط",
-            "Version 0.2 — Read-only MVP",
-            "Version 0.2 — Version en lecture seule",
-            "Versión 0.2 — Solo lectura"
+            AppInfo.Format(VersionLabelTemplates[0]),
+            AppInfo.Format(VersionLabelTemplates[1]),
+            AppInfo.Format(VersionLabelTemplates[2]),
+            AppInfo.Format(VersionLabelTemplates[3]),
+            AppInfo.Format(VersionLabelTemplates[4])
         };
 
         string[] readyMessages =

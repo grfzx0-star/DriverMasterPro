@@ -7,6 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>DriverMasterPro</AssemblyName>
     <RootNamespace>DriverMasterPro</RootNamespace>
+    <Version>0.2.0</Version>
     <DefaultItemExcludes>$(DefaultItemExcludes);tests\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>

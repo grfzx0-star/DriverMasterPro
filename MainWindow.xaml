@@ -210,8 +210,9 @@
 
 </ComboBox>
 
+     <!-- Text is filled from Services.AppInfo in the constructor; never hardcode a version here. -->
      <TextBlock x:Name="VersionLabel"
-      Text="Version 0.2 — Read-only MVP"
+      Text=""
       Foreground="#71879A" FontSize="10"
       Margin="0,17,0,0"/>
     </StackPanel>
@@ -334,7 +335,7 @@
      <TextBlock x:Name="HistoryLabel"
       Text="Scan-Verlauf:"
       VerticalAlignment="Center"
-      Foreground="#AABAC9" Margin="0,0,10,0"/>
+      Foreground="#AABAC9" Margin="10,0"/>
 
      <ComboBox x:Name="SnapshotHistoryBox"
       Grid.Column="1" Height="34"
@@ -370,7 +371,7 @@
      <TextBlock x:Name="SearchLabel"
       Text="Suche:"
       VerticalAlignment="Center"
-      Foreground="#AABAC9" Margin="0,0,10,0"/>
+      Foreground="#AABAC9" Margin="10,0"/>
 
      <TextBox x:Name="SearchBox"
       Grid.Column="1" Height="34"
@@ -380,7 +381,7 @@
       Grid.Column="2" Text="Filter:"
       VerticalAlignment="Center"
       Foreground="#AABAC9"
-      Margin="17,0,10,0"/>
+      Margin="10,0"/>
 
      <ComboBox x:Name="FilterBox"
       Grid.Column="3" Height="34"
