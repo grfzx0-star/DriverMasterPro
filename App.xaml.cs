@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using DriverMasterPro.Services;
 using DriverMasterPro.Services.Abstractions;
+using DriverMasterPro.Services.Localization;
 
 namespace DriverMasterPro;
 
@@ -23,6 +24,7 @@ public partial class App : Application
                 services.AddTransient<IDeviceScanner, DeviceScanner>();
                 services.AddSingleton<IDiagnosticsService, RuleBasedDiagnosticsService>();
                 services.AddSingleton<ISettingsService, JsonSettingsService>();
+                services.AddSingleton<ILocalizationService, LocalizationService>();
 
                 // Register Views
                 services.AddSingleton<MainWindow>();

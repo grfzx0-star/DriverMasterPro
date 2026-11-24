@@ -18,6 +18,7 @@ public partial class MainWindow : Window
     private readonly IDatabaseService _database;
     private readonly IDiagnosticsService _diagnostics;
     private readonly ISettingsService _settings;
+    private readonly ILocalizationService _localization;
     private readonly List<DeviceInfo> _allDevices = new();
     private List<ScanSnapshot> _snapshots = new();
     private CancellationTokenSource? _scanCts;
@@ -48,12 +49,13 @@ public partial class MainWindow : Window
         "Versión {version} — Solo lectura"
     };
 
-    public MainWindow(IDeviceScanner scanner, IDatabaseService database, IDiagnosticsService diagnostics, ISettingsService? settings = null)
+    public MainWindow(IDeviceScanner scanner, IDatabaseService database, IDiagnosticsService diagnostics, ISettingsService? settings = null, ILocalizationService? localization = null)
     {
         _scanner = scanner ?? throw new ArgumentNullException(nameof(scanner));
         _database = database ?? throw new ArgumentNullException(nameof(database));
         _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
         _settings = settings ?? new JsonSettingsService();
+        _localization = localization ?? new LocalizationService();
 
         InitializeComponent();
 
@@ -631,41 +633,43 @@ public partial class MainWindow : Window
             AppInfo.Format(VersionLabelTemplates[4])
         };
 
-        PageTitle.Text = LocalizationCatalog.Languages[languageIndex].PageTitles;
-        PageSubtitle.Text = LocalizationCatalog.Languages[languageIndex].Subtitles;
-        ScanButton.Content = LocalizationCatalog.Languages[languageIndex].ScanButtons;
+        var strings = _localization.GetStrings(languageIndex);
 
-        DevicesLabel.Text = LocalizationCatalog.Languages[languageIndex].DevicesLabels;
-        HealthyLabel.Text = LocalizationCatalog.Languages[languageIndex].HealthyLabels;
-        ProblemLabel.Text = LocalizationCatalog.Languages[languageIndex].ProblemLabels;
+        PageTitle.Text = strings.PageTitles;
+        PageSubtitle.Text = strings.Subtitles;
+        ScanButton.Content = strings.ScanButtons;
 
-        SearchLabel.Text = LocalizationCatalog.Languages[languageIndex].SearchLabels;
-        FilterLabel.Text = LocalizationCatalog.Languages[languageIndex].FilterLabels;
-        HistoryLabel.Text = LocalizationCatalog.Languages[languageIndex].HistoryLabels;
+        DevicesLabel.Text = strings.DevicesLabels;
+        HealthyLabel.Text = strings.HealthyLabels;
+        ProblemLabel.Text = strings.ProblemLabels;
+
+        SearchLabel.Text = strings.SearchLabels;
+        FilterLabel.Text = strings.FilterLabels;
+        HistoryLabel.Text = strings.HistoryLabels;
 
         // Math.Min: UI count vs translation count - prefer visible stale over crash
-        int filterCount = Math.Min(FilterBox.Items.Count, LocalizationCatalog.Languages[languageIndex].FilterOptions.Length);
+        int filterCount = Math.Min(FilterBox.Items.Count, strings.FilterOptions.Length);
         for (int i = 0; i < filterCount; i++)
-            ((ComboBoxItem)FilterBox.Items[i]).Content = LocalizationCatalog.Languages[languageIndex].FilterOptions[i];
+            ((ComboBoxItem)FilterBox.Items[i]).Content = strings.FilterOptions[i];
 
-        SearchBox.ToolTip = LocalizationCatalog.Languages[languageIndex].SearchTooltips;
+        SearchBox.ToolTip = strings.SearchTooltips;
 
         // Math.Min: UI count vs translation count - prefer visible stale over crash
-        int columnCount = Math.Min(DevicesGrid.Columns.Count, LocalizationCatalog.Languages[languageIndex].ColumnHeaders.Length);
+        int columnCount = Math.Min(DevicesGrid.Columns.Count, strings.ColumnHeaders.Length);
         for (int i = 0; i < columnCount; i++)
-            DevicesGrid.Columns[i].Header = LocalizationCatalog.Languages[languageIndex].ColumnHeaders[i];
+            DevicesGrid.Columns[i].Header = strings.ColumnHeaders[i];
 
         _diagnostics.EnrichAll(_allDevices, _isArabic);
         ApplyFilters(false);
         UpdateDiagnosticDetails();
         RefreshHistoryLabels();
         UpdateInventoryStateText();
-        EditionLabel.Text = LocalizationCatalog.Languages[languageIndex].EditionLabels;
-        DashboardButton.Content = LocalizationCatalog.Languages[languageIndex].DashboardLabels;
-        InventoryButton.Content = LocalizationCatalog.Languages[languageIndex].InventoryLabels;
-        LanguageLabel.Text = LocalizationCatalog.Languages[languageIndex].LanguageLabels;
+        EditionLabel.Text = strings.EditionLabels;
+        DashboardButton.Content = strings.DashboardLabels;
+        InventoryButton.Content = strings.InventoryLabels;
+        LanguageLabel.Text = strings.LanguageLabels;
         VersionLabel.Text = versionLabels[languageIndex];
 
-        StatusText.Text = LocalizationCatalog.Languages[languageIndex].ReadyMessages;
+        StatusText.Text = strings.ReadyMessages;
     }
 }

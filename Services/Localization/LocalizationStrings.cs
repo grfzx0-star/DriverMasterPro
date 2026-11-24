@@ -5,7 +5,7 @@ namespace DriverMasterPro.Services.Localization;
 /// golden fixture, so serialization stays deterministic. Flat tables hold one string for that
 /// language; FilterOptions and ColumnHeaders hold the rows it displays.
 /// </summary>
-internal sealed record LocalizationStrings(
+public sealed record LocalizationStrings(
     string PageTitles,
     string Subtitles,
     string ScanButtons,
