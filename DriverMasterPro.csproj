@@ -7,10 +7,18 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>DriverMasterPro</AssemblyName>
     <RootNamespace>DriverMasterPro</RootNamespace>
+    <Version>0.2.0</Version>
+    <DefaultItemExcludes>$(DefaultItemExcludes);tests\**</DefaultItemExcludes>
   </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.14" />
     <PackageReference Include="System.Management" Version="10.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="DriverMasterPro.Tests" />
   </ItemGroup>
 </Project>

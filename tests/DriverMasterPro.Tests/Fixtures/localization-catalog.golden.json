@@ -1,0 +1,157 @@
+[
+  {
+    "PageTitles": "System Dashboard",
+    "Subtitles": "Lokale Geräteübersicht — keine Änderungen am System",
+    "ScanButtons": "Jetzt scannen",
+    "DevicesLabels": "Erkannte Geräte",
+    "HealthyLabels": "Ohne gemeldeten Fehler",
+    "ProblemLabels": "Probleme / unbekannt",
+    "SearchLabels": "Suche:",
+    "FilterLabels": "Filter:",
+    "FilterOptions": [
+      "Alle Geräte",
+      "Probleme oder unbekannt",
+      "Ohne gemeldete Probleme"
+    ],
+    "SearchTooltips": "Suche nach Name, Hersteller oder Diagnose",
+    "ColumnHeaders": [
+      "Gerät",
+      "Hersteller",
+      "WMI-Status",
+      "Problemcode",
+      "Bewertung",
+      "Schweregrad",
+      "Befund"
+    ],
+    "EditionLabels": "Unabhängige Windows-Edition",
+    "DashboardLabels": "Übersicht",
+    "InventoryLabels": "Geräteübersicht",
+    "LanguageLabels": "Sprache / Language",
+    "ReadyMessages": "Bereit.",
+    "HistoryLabels": "Scan-Verlauf:"
+  },
+  {
+    "PageTitles": "لوحة معلومات النظام",
+    "Subtitles": "قائمة محلية للأجهزة — دون تغيير النظام",
+    "ScanButtons": "ابدأ الفحص",
+    "DevicesLabels": "الأجهزة المكتشفة",
+    "HealthyLabels": "بدون أخطاء مسجلة",
+    "ProblemLabels": "مشاكل / غير معروف",
+    "SearchLabels": "بحث:",
+    "FilterLabels": "تصفية:",
+    "FilterOptions": [
+      "كل الأجهزة",
+      "مشاكل أو حالة غير معروفة",
+      "دون مشاكل مُبلّغ عنها"
+    ],
+    "SearchTooltips": "ابحث بالاسم أو الشركة المصنعة أو التشخيص",
+    "ColumnHeaders": [
+      "الجهاز",
+      "الشركة المصنعة",
+      "حالة WMI",
+      "رمز المشكلة",
+      "التقييم",
+      "الشدة",
+      "النتيجة"
+    ],
+    "EditionLabels": "إصدار مستقل لنظام Windows",
+    "DashboardLabels": "لوحة المعلومات",
+    "InventoryLabels": "قائمة الأجهزة",
+    "LanguageLabels": "اللغة",
+    "ReadyMessages": "جاهز.",
+    "HistoryLabels": "سجل الفحوصات:"
+  },
+  {
+    "PageTitles": "System Dashboard",
+    "Subtitles": "Local device overview — no system changes",
+    "ScanButtons": "Scan now",
+    "DevicesLabels": "Detected devices",
+    "HealthyLabels": "No reported errors",
+    "ProblemLabels": "Issues / unknown",
+    "SearchLabels": "Search:",
+    "FilterLabels": "Filter:",
+    "FilterOptions": [
+      "All devices",
+      "Issues or unknown",
+      "No reported issues"
+    ],
+    "SearchTooltips": "Search by name, manufacturer, or diagnostic finding",
+    "ColumnHeaders": [
+      "Device",
+      "Manufacturer",
+      "WMI status",
+      "Problem code",
+      "Assessment",
+      "Severity",
+      "Finding"
+    ],
+    "EditionLabels": "Independent Windows Edition",
+    "DashboardLabels": "Dashboard",
+    "InventoryLabels": "Device inventory",
+    "LanguageLabels": "Language",
+    "ReadyMessages": "Ready.",
+    "HistoryLabels": "Scan history:"
+  },
+  {
+    "PageTitles": "Tableau de bord",
+    "Subtitles": "Vue locale des appareils — aucune modification du système",
+    "ScanButtons": "Analyser maintenant",
+    "DevicesLabels": "Appareils détectés",
+    "HealthyLabels": "Sans erreur signalée",
+    "ProblemLabels": "Problèmes / inconnus",
+    "SearchLabels": "Recherche :",
+    "FilterLabels": "Filtre :",
+    "FilterOptions": [
+      "Tous les appareils",
+      "Problèmes ou inconnus",
+      "Aucun problème signalé"
+    ],
+    "SearchTooltips": "Rechercher par nom, fabricant ou constat",
+    "ColumnHeaders": [
+      "Appareil",
+      "Fabricant",
+      "État WMI",
+      "Code erreur",
+      "Évaluation",
+      "Gravité",
+      "Constat"
+    ],
+    "EditionLabels": "Édition Windows indépendante",
+    "DashboardLabels": "Tableau de bord",
+    "InventoryLabels": "Inventaire des appareils",
+    "LanguageLabels": "Langue",
+    "ReadyMessages": "Prêt.",
+    "HistoryLabels": "Historique des analyses :"
+  },
+  {
+    "PageTitles": "Panel del sistema",
+    "Subtitles": "Resumen local de dispositivos — sin cambios en el sistema",
+    "ScanButtons": "Analizar ahora",
+    "DevicesLabels": "Dispositivos detectados",
+    "HealthyLabels": "Sin errores registrados",
+    "ProblemLabels": "Problemas / desconocido",
+    "SearchLabels": "Buscar:",
+    "FilterLabels": "Filtro:",
+    "FilterOptions": [
+      "Todos los dispositivos",
+      "Problemas o desconocidos",
+      "Sin problemas reportados"
+    ],
+    "SearchTooltips": "Buscar por nombre, fabricante o diagnóstico",
+    "ColumnHeaders": [
+      "Dispositivo",
+      "Fabricante",
+      "Estado WMI",
+      "Código",
+      "Evaluación",
+      "Gravedad",
+      "Hallazgo"
+    ],
+    "EditionLabels": "Edición independiente de Windows",
+    "DashboardLabels": "Panel",
+    "InventoryLabels": "Inventario de dispositivos",
+    "LanguageLabels": "Idioma",
+    "ReadyMessages": "Listo.",
+    "HistoryLabels": "Historial de análisis:"
+  }
+]

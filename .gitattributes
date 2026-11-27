@@ -1,0 +1,26 @@
+# ---- Default: normalise text, CRLF in the working tree (Windows desktop) ----
+* text=auto eol=crlf
+
+# ---- Formats that must stay LF ----
+*.yml          text eol=lf
+*.yaml         text eol=lf
+*.sh           text eol=lf
+.gitattributes text eol=lf
+
+# ---- Project text formats (explicit, future-proof) ----
+*.cs     text diff=csharp
+*.xaml   text
+*.csproj text
+*.sln    text eol=crlf
+*.md     text
+.gitignore text
+
+# ---- Binary: never convert ----
+*.dll binary
+*.exe binary
+*.pdb binary
+*.zip binary
+*.db  binary
+*.png binary
+*.jpg binary
+*.trx binary

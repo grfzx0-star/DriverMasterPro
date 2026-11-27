@@ -1,21 +1,16 @@
 name: DriverMasterPro CI
 
-# INTERIM GATE (v0.2 bootstrap)
-# main currently has no tests/ directory and no .sln, so the full two-job gate
-# (restore tests -> dotnet test -> TRX verdict, plus live WMI integration) cannot
-# run here. This trimmed workflow keeps a real build gate on main until PR #5
-# lands the test projects; the required-status-check name is swapped afterwards.
-# Note: apps-only build. Do not add paths: filters - a skipped required check
-# stays "Expected" forever and blocks merges.
-
 on:
   push:
     branches:
+      - feature/v0.2-foundation
       - main
       - 'fix/**'
+
   pull_request:
     branches:
       - main
+      - feature/v0.2-foundation
 
 permissions:
   contents: read
@@ -25,10 +20,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Build (Windows / .NET 10 / Release)
+  build-and-test:
+    name: Build and test (Windows / .NET 10 / Release)
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     defaults:
       run:
@@ -40,21 +35,34 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Print checked-out commit identity
         shell: pwsh
+        env:
+          PR_HEAD_REF: ${{ github.head_ref }}
+          PR_BASE_REF: ${{ github.base_ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           $ErrorActionPreference = 'Stop'
-          Write-Host "Event name:      $env:GITHUB_EVENT_NAME"
-          Write-Host "GITHUB_SHA:      $env:GITHUB_SHA"
-          Write-Host "GITHUB_REF:      $env:GITHUB_REF"
+          $checkedOut = (git rev-parse HEAD).Trim()
+          Write-Host "Event name:        $env:GITHUB_EVENT_NAME"
+          Write-Host "GITHUB_SHA:        $env:GITHUB_SHA"
+          Write-Host "GITHUB_REF:        $env:GITHUB_REF"
+          Write-Host "Checked-out SHA:   $checkedOut"
+          if ($env:GITHUB_EVENT_NAME -eq 'pull_request') {
+            Write-Host "PR head SHA:       $env:PR_HEAD_SHA"
+            Write-Host "PR base SHA:       $env:PR_BASE_SHA"
+            Write-Host "PR head ref:       $env:PR_HEAD_REF"
+            Write-Host "PR base ref:       $env:PR_BASE_REF"
+          }
           git --no-pager log -1 --format="Commit: %H%nAuthor: %an%nDate:   %ci%nSubject: %s"
 
       - name: Setup .NET 10
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
 
@@ -62,28 +70,147 @@ jobs:
         run: dotnet --info
 
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: Restore application
-        run: dotnet restore .\DriverMasterPro.csproj
+      - name: Restore application and tests
+        run: dotnet restore .\tests\DriverMasterPro.Tests\DriverMasterPro.Tests.csproj
 
       - name: Build application (Release)
+        run: dotnet build .\DriverMasterPro.csproj --configuration Release --no-restore
+
+      - name: Build test project (Release)
+        run: dotnet build .\tests\DriverMasterPro.Tests\DriverMasterPro.Tests.csproj --configuration Release --no-restore
+
+      - name: Execute automated tests (Release)
         run: |
           $ErrorActionPreference = 'Stop'
-          dotnet build .\DriverMasterPro.csproj --configuration Release --no-restore
+          $resultsDirectory = Join-Path $env:RUNNER_TEMP ("DriverMasterPro-TestResults-" + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $resultsDirectory -Force | Out-Null
+          "TRX_DIR=$resultsDirectory" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          dotnet test .\tests\DriverMasterPro.Tests\DriverMasterPro.Tests.csproj `
+            --configuration Release --no-build --no-restore `
+            --results-directory $resultsDirectory `
+            --logger "console;verbosity=normal" `
+            --logger "trx;LogFileName=automated-tests.trx"
           if ($LASTEXITCODE -ne 0) {
-            throw "dotnet build failed with exit code $LASTEXITCODE."
+            throw "dotnet test failed with exit code $LASTEXITCODE."
           }
 
-      - name: Verify build output exists
+          $trxPath = Join-Path $resultsDirectory 'automated-tests.trx'
+          if (-not (Test-Path $trxPath)) {
+            throw "Test result file was not produced: $trxPath"
+          }
+
+          [xml]$trx = Get-Content -LiteralPath $trxPath -Raw
+          $counters = $trx.TestRun.ResultSummary.Counters
+          if ($null -eq $counters) {
+            throw "Test result file has no execution counters."
+          }
+
+          $total = [int]$counters.GetAttribute('total')
+          $passed = [int]$counters.GetAttribute('passed')
+          $failed = [int]$counters.GetAttribute('failed')
+          $notExecuted = [int]$counters.GetAttribute('notExecuted')
+          Write-Host "CI test results: total=$total passed=$passed failed=$failed skipped=$notExecuted"
+          if ($total -le 0 -or $passed -ne $total -or $failed -ne 0 -or $notExecuted -ne 0) {
+            throw "Test result gate failed: require at least one test, all tests passed, and no failures or skips."
+          }
+
+      - name: Upload test results (TRX)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ github.run_number }}
+          path: ${{ env.TRX_DIR }}/**/*.trx
+          if-no-files-found: warn
+          retention-days: 14
+
+  wmi-integration:
+    name: Live WMI integration (Windows / .NET 10 / Release)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    needs: build-and-test
+
+    defaults:
+      run:
+        shell: pwsh
+
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-livewmi-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore integration tests
+        run: dotnet restore .\tests\DriverMasterPro.IntegrationTests\DriverMasterPro.IntegrationTests.csproj
+
+      - name: Build integration test project (Release)
+        run: dotnet build .\tests\DriverMasterPro.IntegrationTests\DriverMasterPro.IntegrationTests.csproj --configuration Release --no-restore
+
+      - name: Execute live WMI tests (Release)
         run: |
           $ErrorActionPreference = 'Stop'
-          $dlls = Get-ChildItem -Path .\bin\Release -Recurse -Filter 'DriverMasterPro.dll' -ErrorAction SilentlyContinue
-          if (-not $dlls) { throw "Build produced no DriverMasterPro.dll under .\bin\Release." }
-          Write-Host "Build artefacts:"
-          foreach ($d in $dlls) { Write-Host ("  {0} ({1:N0} bytes)" -f $d.FullName, $d.Length) }
+          $resultsDirectory = Join-Path $env:RUNNER_TEMP ("DriverMasterPro-WmiResults-" + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $resultsDirectory -Force | Out-Null
+          "WMI_TRX_DIR=$resultsDirectory" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          dotnet test .\tests\DriverMasterPro.IntegrationTests\DriverMasterPro.IntegrationTests.csproj `
+            --configuration Release --no-build --no-restore `
+            --results-directory $resultsDirectory `
+            --logger "console;verbosity=normal" `
+            --logger "trx;LogFileName=live-wmi-tests.trx"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Live WMI test run failed with exit code $LASTEXITCODE."
+          }
+
+          $trxPath = Join-Path $resultsDirectory 'live-wmi-tests.trx'
+          if (-not (Test-Path $trxPath)) {
+            throw "Test result file was not produced: $trxPath"
+          }
+
+          [xml]$trx = Get-Content -LiteralPath $trxPath -Raw
+          $counters = $trx.TestRun.ResultSummary.Counters
+          if ($null -eq $counters) {
+            throw "Test result file has no execution counters."
+          }
+
+          $total = [int]$counters.GetAttribute('total')
+          $passed = [int]$counters.GetAttribute('passed')
+          $failed = [int]$counters.GetAttribute('failed')
+          $notExecuted = [int]$counters.GetAttribute('notExecuted')
+          Write-Host "Live WMI results: total=$total passed=$passed failed=$failed skipped=$notExecuted"
+          if ($total -le 0 -or $passed -ne $total -or $failed -ne 0 -or $notExecuted -ne 0) {
+            throw "Test result gate failed: require at least one test, all tests passed, and no failures or skips."
+          }
+
+      - name: Upload live WMI test results (TRX)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: live-wmi-test-results-${{ github.run_number }}
+          path: ${{ env.WMI_TRX_DIR }}/**/*.trx
+          if-no-files-found: warn
+          retention-days: 14

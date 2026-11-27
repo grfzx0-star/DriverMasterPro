@@ -1,29 +1,60 @@
-using System.Management;
+using System.Diagnostics;
 using DriverMasterPro.Models;
+using DriverMasterPro.Services.Abstractions;
 
 namespace DriverMasterPro.Services;
 
-/// <summary>Read-only Windows Plug-and-Play inventory. No driver changes are made.</summary>
-public sealed class DeviceScanner
+/// <summary>
+/// Read-only Windows Plug-and-Play inventory service.
+/// Queries WMI Win32_PnPEntity. No driver changes, registry writes, or system modifications are made.
+/// </summary>
+public sealed class DeviceScanner : IDeviceScanner
 {
-    public Task<List<DeviceInfo>> ScanAsync() => Task.Run(() =>
+    /// <summary>
+    /// Timeout applied to individual WMI batch packet retrievals (IEnumWbemClassObject::Next).
+    /// Note: This is NOT the total scan timeout. Total timeout is governed by the caller's CancellationToken.
+    /// </summary>
+    public static readonly TimeSpan WmiBatchPacketTimeout = WmiDeviceInventoryProvider.BatchPacketTimeout;
+
+    private readonly IDeviceInventoryProvider _inventoryProvider;
+
+    public DeviceScanner(IDeviceInventoryProvider inventoryProvider)
     {
-        var devices = new List<DeviceInfo>();
-        using var searcher = new ManagementObjectSearcher(
-            "SELECT Name, PNPDeviceID, Manufacturer, Status, ConfigManagerErrorCode FROM Win32_PnPEntity");
-        using var results = searcher.Get();
-        foreach (ManagementObject item in results)
+        _inventoryProvider = inventoryProvider ?? throw new ArgumentNullException(nameof(inventoryProvider));
+    }
+
+    public DeviceScanner() : this(new WmiDeviceInventoryProvider())
+    {
+    }
+
+    /// <summary>
+    /// Executes a read-only inventory scan and sorts the results by device name.
+    ///
+    /// CANCELLATION GUARANTEES &amp; LIMITATIONS:
+    /// - Cooperative cancellation is evaluated before starting and between item iterations.
+    /// - UNMANAGED COM LIMITATION: If an unmanaged COM RPC call blocks inside native code
+    ///   (e.g., waiting for an unresponsive kernel driver or deadlocked WmiPrvSE provider),
+    ///   managed CancellationToken cannot preempt the unmanaged thread. Cancellation takes
+    ///   effect immediately once control returns from native code to managed code.
+    /// </summary>
+    public Task<List<DeviceInfo>> ScanAsync(CancellationToken cancellationToken = default) => Task.Run(() =>
+    {
+        try
         {
-            devices.Add(new DeviceInfo
-            {
-                Name = Convert.ToString(item["Name"]) ?? "Unknown device",
-                DeviceId = Convert.ToString(item["PNPDeviceID"]) ?? "",
-                Manufacturer = Convert.ToString(item["Manufacturer"]) ?? "",
-                Status = Convert.ToString(item["Status"]) ?? "",
-                ProblemCode = item["ConfigManagerErrorCode"] is null
-                    ? 0u : Convert.ToUInt32(item["ConfigManagerErrorCode"])
-            });
+            cancellationToken.ThrowIfCancellationRequested();
+            var devices = _inventoryProvider.GetDevices(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            return devices.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList();
         }
-        return devices.OrderBy(d => d.Name).ToList();
-    });
+        catch (OperationCanceledException)
+        {
+            Trace.TraceWarning("[DeviceScanner] ScanAsync operation was cancelled.");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceError($"[DeviceScanner] ScanAsync unexpected error: {ex}");
+            throw;
+        }
+    }, cancellationToken);
 }
