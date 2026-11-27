@@ -1,9 +1,18 @@
 name: DriverMasterPro CI
 
+# INTERIM GATE (v0.2 bootstrap)
+# main currently has no tests/ directory and no .sln, so the full two-job gate
+# (restore tests -> dotnet test -> TRX verdict, plus live WMI integration) cannot
+# run here. This trimmed workflow keeps a real build gate on main until PR #5
+# lands the test projects; the required-status-check name is swapped afterwards.
+# Note: apps-only build. Do not add paths: filters - a skipped required check
+# stays "Expected" forever and blocks merges.
+
 on:
   push:
     branches:
-      - ci/github-actions-dotnet10-from-main
+      - main
+      - 'fix/**'
   pull_request:
     branches:
       - main
@@ -11,23 +20,70 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: drivermasterpro-ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build-and-test:
+  build:
+    name: Build (Windows / .NET 10 / Release)
     runs-on: windows-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        shell: pwsh
+
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Print checked-out commit identity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Write-Host "Event name:      $env:GITHUB_EVENT_NAME"
+          Write-Host "GITHUB_SHA:      $env:GITHUB_SHA"
+          Write-Host "GITHUB_REF:      $env:GITHUB_REF"
+          git --no-pager log -1 --format="Commit: %H%nAuthor: %an%nDate:   %ci%nSubject: %s"
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: '10.0.x'
 
-      - name: Restore
+      - name: .NET info
+        run: dotnet --info
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore application
         run: dotnet restore .\DriverMasterPro.csproj
 
-      - name: Build
-        run: dotnet build .\DriverMasterPro.csproj --configuration Release --no-restore
+      - name: Build application (Release)
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet build .\DriverMasterPro.csproj --configuration Release --no-restore
+          if ($LASTEXITCODE -ne 0) {
+            throw "dotnet build failed with exit code $LASTEXITCODE."
+          }
 
-      
+      - name: Verify build output exists
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dlls = Get-ChildItem -Path .\bin\Release -Recurse -Filter 'DriverMasterPro.dll' -ErrorAction SilentlyContinue
+          if (-not $dlls) { throw "Build produced no DriverMasterPro.dll under .\bin\Release." }
+          Write-Host "Build artefacts:"
+          foreach ($d in $dlls) { Write-Host ("  {0} ({1:N0} bytes)" -f $d.FullName, $d.Length) }
